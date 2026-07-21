@@ -13,6 +13,7 @@ import {
   _transport, normalizeApiBase, isLocalPreviewHost, getHeavyOpsInFlight,
   heavyOpEnter, heavyOpLeave,
   URL_API, WIFI_BLOCKED, USB_HIDDEN, DEMO_MODE, resetDemoMemory,
+  getDemoSnapshot,
 } from './api.js';
 // Stores de mídia (back-images + ícones de upload) — extraidos pra ./stores.js.
 import {
@@ -9951,16 +9952,284 @@ function GLayoutMiniSketch({ layout, selected, iconShape, custom = false, custom
 // Simulador visual da controladora. É alimentado pelo mesmo estado editado no
 // webApp, portanto modelo, banco, preset, nomes, modos e LEDs aparecem sem
 // qualquer equipamento físico conectado.
+// Geometria dos layouts de icon_draw_live_layout() no firmware da BFMIDI-3.
+// Todas as medidas estao em pixels do framebuffer real 480x320.
+function demo480LayoutRects(layout, customLayout, presetMode) {
+  const rects = [];
+  const addRow = (switches, y, w, h, gapX, xStart, layer) => {
+    switches.forEach((sw, col) => rects.push({
+      sw, layer, x: xStart + col * (w + gapX), y, w, h, layout,
+    }));
+  };
+  if (layout === 1) {
+    const w = 150, h = 120, stripH = 56, gapX = 7, gapY = 6;
+    const yStrip = gapY + h + gapY;
+    addRow([4, 5, 6], gapY, w, h, gapX, gapX, 1);
+    addRow([1, 2, 3], yStrip + stripH + gapY, w, h, gapX, gapX, 1);
+  } else if (layout === 2) {
+    const w = 150, h = 150, gapX = 7, gapY = 6;
+    addRow([4, 5, 6], gapY, w, h, gapX, gapX, 1);
+    addRow([1, 2, 3], gapY + h + gapY, w, h, gapX, gapX, 1);
+  } else if (layout === 3) {
+    const w = 70, h = 70, gapX = 8, gapY = 56, stripH = 80;
+    addRow([1, 2, 3, 4, 5, 6], gapY + stripH + gapY + (presetMode ? 10 : 0),
+      w, h, gapX, gapX, 1);
+  } else if (layout === 4) {
+    const w = 70, h = 70, gapX = 8, gapY = 39, stripH = 56, innerGapY = 6;
+    const yStrip = gapY + 20;
+    const yL1 = yStrip + stripH + gapY;
+    addRow([1, 2, 3, 4, 5, 6], yL1, w, h, gapX, gapX, 1);
+    addRow([1, 2, 3, 4, 5, 6], yL1 + h + innerGapY, w, h, gapX, gapX, 2);
+  } else {
+    const items = Array.isArray(customLayout) ? customLayout : makeDefaultCustomLayout();
+    items.slice(0, 6).forEach((item, index) => {
+      if (!item?.enabled) return;
+      const sizePct = clamp(item.size, CUSTOM_LAYOUT_MIN_SIZE, CUSTOM_LAYOUT_MAX_SIZE);
+      const tile = Math.max(20, Math.min(320, Math.floor(320 * sizePct / 100)));
+      rects.push({
+        sw: index + 1, layer: 1,
+        x: Math.floor((480 - tile) * clamp(item.x, 0, 100) / 100),
+        y: Math.floor((320 - tile) * clamp(item.y, 0, 100) / 100),
+        w: tile, h: tile, layout: 2,
+      });
+    });
+  }
+  return rects;
+}
+
+function demo480NameArea(layout, presetMode, customMode) {
+  if (presetMode || customMode) return { x: 0, y: 0, w: 480, h: 320 };
+  if (layout === 1) return { x: 7, y: 132, w: 464, h: 56 };
+  if (layout === 3) return { x: 8, y: 56, w: 460, h: 80 };
+  if (layout === 4) return { x: 8, y: 59, w: 460, h: 56 };
+  return null;
+}
+
+function demo480SubDisplay(base, sub) {
+  const d = { ...base };
+  if (!sub) return d;
+  return {
+    ...d,
+    icon_id: sub.icon_id ?? d.icon_id,
+    mode: sub.mode || d.mode,
+    sigla: sub.sigla || d.sigla,
+    sg: sub.sg ?? d.sg,
+    ic_off: sub.ic ?? sub.ic_on ?? d.ic_off,
+    ic_on: sub.ic ?? sub.ic_on ?? d.ic_on,
+    bg_off: sub.bg ?? sub.bg_on ?? d.bg_off,
+    bg_on: sub.bg ?? sub.bg_on ?? d.bg_on,
+    br_off: sub.br ?? sub.br_on ?? d.br_off,
+    br_on: sub.br ?? sub.br_on ?? d.br_on,
+  };
+}
+
+// Espelha icon_disp_resolve_state(): o modo e o ultimo gesto determinam qual
+// visual (principal, SPIN, STOMP B/C ou TAP) aparece no tile.
+function demo480ResolveTile(disp, modeId, on, spinState, lastSection) {
+  let d = { ...DEFAULT_SW_DISPLAY(), ...(disp || {}) };
+  if (modeId === 'spin') {
+    const idx = spinState >= 0 && spinState <= 2 ? spinState : 0;
+    d = demo480SubDisplay(d, (d.spin || [])[idx] || DEFAULT_SW_SPIN_STATE());
+    return { disp: d, on: true };
+  }
+  if (modeId === 'single') {
+    d = demo480SubDisplay(d, (d.spin || [])[0]);
+    return { disp: d, on: true };
+  }
+  if (modeId === 'tap_tempo') {
+    d = demo480SubDisplay(d, (d.tap || [])[0]);
+    return { disp: d, on: true };
+  }
+  if ((modeId === 'fx1' || modeId === 'fx2' || modeId === 'fx3') && lastSection > 0) {
+    const offset = lastSection === 2 ? 2 : 0;
+    d = demo480SubDisplay(d, (d.stomp || [])[offset + (on ? 1 : 0)]);
+  }
+  return { disp: d, on };
+}
+
+function Demo480Tile({ disp, on, shape, layoutId, width, height }) {
+  const d = { ...DEFAULT_SW_DISPLAY(), ...(disp || {}) };
+  const ic = paletteCssSolid(on ? d.ic_on : d.ic_off);
+  const sg = d.sg != null && d.sg >= 0 ? paletteCssSolid(d.sg) : ic;
+  const bg = paletteCss(on ? d.bg_on : d.bg_off);
+  const br = paletteCssSolid(on ? d.br_on : d.br_off);
+  const minDim = Math.min(width, height);
+  const circle = shape === 'circle';
+  const octagon = shape === 'octagon';
+  const tileW = circle ? minDim : width;
+  const tileH = circle ? minDim : height;
+  const border = br === 'transparent' ? 0 : Math.max(2, Math.floor(minDim * 0.04)) + (bg === 'transparent' ? 1 : 0);
+  const sigla = String(d.sigla || '').trim().slice(0, 8);
+  const small = layoutId === 3 || layoutId === 4;
+  const iconSize = Math.max(14, Math.floor(Math.min(tileW, tileH) * (sigla ? 0.63 : 0.78) * (circle ? 0.82 : octagon ? 0.90 : 1)));
+  const style = {
+    width: `${tileW}px`, height: `${tileH}px`,
+    background: bg === 'transparent' ? 'transparent' : bg,
+    border: border ? `${border}px solid ${br}` : 'none',
+    borderRadius: circle ? '50%' : octagon ? 0 : `${Math.max(4, Math.floor(minDim * 0.18))}px`,
+    clipPath: octagon ? 'polygon(29% 0,71% 0,100% 29%,100% 71%,71% 100%,29% 100%,0 71%,0 29%)' : undefined,
+  };
+  return (
+    <div className="bf-demo-480-tile" style={style}>
+      {d.mode === 'text' ? (
+        <span className="bf-demo-480-tile-text" style={{ color: ic, fontSize: `${Math.floor(tileH * 0.38)}px` }}>
+          {(sigla || '-').slice(0, 3)}
+        </span>
+      ) : (
+        <>
+          <SwIconImg iconId={d.icon_id} color={ic} size={iconSize} />
+          {sigla && <span className={'bf-demo-480-tile-sigla' + (small ? ' is-small' : '')} style={{ color: sg }}>{sigla}</span>}
+        </>
+      )}
+    </div>
+  );
+}
+
+function Demo480Name({ meta, label, area, classic = false }) {
+  if (!area) return null;
+  const frameMeta = { ...DEFAULT_PRESET_META(), ...(meta || {}) };
+  const style = npFrameStyle(frameMeta, 1,
+    { x: frameMeta.nameX ?? 50, y: frameMeta.nameY ?? 50 }, classic, false);
+  if (!classic) {
+    style.padding = '8px 14px';
+    style.borderRadius = '10px';
+    const borderId = clamp(frameMeta.nameBorderColorId, 0, DISPLAY_PALETTE.length - 1);
+    if (DISPLAY_PALETTE[borderId]?.type !== DISP_TYPE.TRANSPARENT) {
+      const color = paletteCssSolid(borderId);
+      const ring = [];
+      for (let y = -2; y <= 2; y++) for (let x = -2; x <= 2; x++) {
+        if (x || y) ring.push(`${color} ${x}px ${y}px 0`);
+      }
+      style.textShadow = ring.join(', ');
+    }
+  }
+  return (
+    <foreignObject x={area.x} y={area.y} width={area.w} height={area.h}>
+      <div xmlns="http://www.w3.org/1999/xhtml" className="bf-demo-480-name-area">
+        <div className="bf-demo-480-name-frame" style={style}>{label}</div>
+      </div>
+    </foreignObject>
+  );
+}
+
+function demo480ListLabels(currentTag, currentLabel, bankLetterEnabled) {
+  const snapshot = getDemoSnapshot();
+  const tags = [];
+  for (const [index, letter] of [...'ABCDEFGHIJ'].entries()) {
+    if (Array.isArray(bankLetterEnabled) && !bankLetterEnabled[index] && letter !== currentTag[0]) continue;
+    for (let n = 1; n <= 6; n++) tags.push(`${letter}${n}`);
+  }
+  const currentIndex = Math.max(0, tags.indexOf(currentTag));
+  const nameFor = (presetTag) => {
+    if (presetTag === currentTag) return currentLabel;
+    const raw = snapshot?.presets?.[presetTag]?.meta;
+    return String(raw?.name_raw ?? raw?.name ?? presetTag).trim() || presetTag;
+  };
+  return {
+    current: nameFor(currentTag),
+    next: [1, 2, 3].map((step) => nameFor(tags[(currentIndex + step) % tags.length])),
+    previous: [1, 2, 3].map((step) => nameFor(tags[(currentIndex - step + tags.length) % tags.length])),
+  };
+}
+
+function Bfmidi480Display({
+  model, switchMode, gigView, tag, label, meta,
+  liveLayout, presetLayout, liveCustomLayout, presetCustomLayout,
+  namePresetLive, namePresetBank, iconShape, presetIconShape,
+  layer1, layer2, editorLayer, bankLetterEnabled,
+  activeLedPixels, spinStates, lastSections,
+}) {
+  useImageStore();
+  const resolution = displayResolutionFor(model);
+  if (resolution.w !== 480 || resolution.h !== 320) {
+    return (
+      <div className="bf-demo-display is-320">
+        <div className="bf-demo-display-glass bf-demo-display-unavailable">
+          SIMULAÇÃO DE DISPLAY DISPONÍVEL PARA BFMIDI-3 · 480×320
+        </div>
+      </div>
+    );
+  }
+  const displayMode = gigView === 'preset' ? 'preset' : gigView === 'live' ? 'live' : switchMode;
+  const presetMode = displayMode === 'preset';
+  const layout = Number(presetMode ? presetLayout : liveLayout) || (presetMode ? 0 : 1);
+  const customMode = (!presetMode && layout === 5) || (presetMode && layout === 6);
+  const frameMeta = { ...DEFAULT_PRESET_META(), ...(meta || {}), name: label };
+  const backgroundId = presetMode ? frameMeta.bgColorId : frameMeta.backLayersColorId;
+  const background = paletteCss(backgroundId);
+  const showName = presetMode ? namePresetBank : namePresetLive;
+  const shape = presetMode ? presetIconShape : iconShape;
+  const rects = (presetMode && layout === 0) || (presetMode && layout === 5)
+    ? [] : demo480LayoutRects(layout, presetMode ? presetCustomLayout : liveCustomLayout, presetMode);
+  const list = presetMode && layout === 5 ? demo480ListLabels(tag, label, bankLetterEnabled) : null;
+  const layerData = (layer) => layer === 2 ? layer2 : layer1;
+  return (
+    <div className="bf-demo-display is-480">
+      <div className="bf-demo-display-glass" style={{ background: background === 'transparent' ? '#000' : background }}>
+        <svg className="bf-demo-480-svg" viewBox="0 0 480 320" preserveAspectRatio="none" aria-label={`Display BFMIDI-3 ${displayMode.toUpperCase()}`}>
+          {rects.map((rect, index) => {
+            // Layout 4 mostra os dois layers. Os demais seguem o layer ativo,
+            // exatamente como currentLiveLayer no firmware.
+            const source = layerData(rect.layout === 4 ? rect.layer : (editorLayer === 2 ? 2 : 1));
+            const modeId = source?.modes?.[rect.sw] || 'mute';
+            const section = lastSections?.[rect.sw] || 0;
+            const arc = section === 1 ? 0 : section === 2 ? 2 : 1;
+            const resolved = demo480ResolveTile(source?.display?.[rect.sw], modeId,
+              !!activeLedPixels?.[rect.sw]?.[arc], spinStates?.[rect.sw], section);
+            return (
+              <foreignObject key={`${rect.layer}-${rect.sw}-${index}`} x={rect.x} y={rect.y} width={rect.w} height={rect.h}>
+                <div xmlns="http://www.w3.org/1999/xhtml" className="bf-demo-480-tile-wrap">
+                  <Demo480Tile disp={resolved.disp} on={resolved.on} shape={shape}
+                    layoutId={rect.layout} width={rect.w} height={rect.h} />
+                </div>
+              </foreignObject>
+            );
+          })}
+          {presetMode && layout === 0 && showName && (
+            <Demo480Name meta={frameMeta} label={label} area={{ x: 0, y: 0, w: 480, h: 320 }} classic />
+          )}
+          {list && (
+            <foreignObject x="0" y="0" width="480" height="320">
+              <div xmlns="http://www.w3.org/1999/xhtml" className="bf-demo-480-list" style={{
+                color: paletteCssSolid(frameMeta.nameColorId),
+                fontWeight: frameMeta.fontBold ? 700 : 400,
+              }}>
+                {[...list.next].reverse().map((name, i) => <span key={`n${i}`}>{name}</span>)}
+                <strong style={{
+                  color: paletteCssSolid(frameMeta.nameColorId),
+                  background: paletteCss(frameMeta.tagColorId),
+                  borderColor: paletteCssSolid(frameMeta.nameColorId),
+                  fontSize: `${frameMeta.fontSize || 18}px`,
+                  fontWeight: frameMeta.fontBold ? 700 : 400,
+                }}>{list.current}</strong>
+                {list.previous.map((name, i) => <span key={`p${i}`}>{name}</span>)}
+              </div>
+            </foreignObject>
+          )}
+          {!list && !(presetMode && layout === 0) && showName && (
+            <Demo480Name meta={frameMeta} label={label}
+              area={demo480NameArea(layout, presetMode, customMode)} />
+          )}
+        </svg>
+      </div>
+    </div>
+  );
+}
+
 function DemoControllerModal({
   open, onClose, model, switchMode, onSetSwitchMode,
   bankLetterIndex, presetNumber, bankDisplayName, presetCount,
   onSelectPreset, onPreviousBank, onNextBank,
   swModes, swParams, swDisplay, ledColorMode, letterLedColors, switchLedColors,
   liveLedColor, brightness,
+  displayMeta, liveLayout, presetLayout, liveCustomLayout, presetCustomLayout,
+  namePresetLive, namePresetBank, iconShape, presetIconShape, gigView,
+  editorLayer, swModesL2, swParamsL2, swDisplayL2, bankLetterEnabled,
 }) {
   const emptyLedPixels = () => Array.from({ length: 9 }, () => [false, false, false]);
   const [activeLedPixels, setActiveLedPixels] = useState(emptyLedPixels);
   const [spinStates, setSpinStates] = useState(() => Array(9).fill(-1));
+  const [lastSections, setLastSections] = useState(() => Array(9).fill(0));
   const [pressedSwitch, setPressedSwitch] = useState(0);
   const modelInfo = MODELS.find((item) => item.id === model) || MODELS[0];
   const switchCount = Math.max(4, Math.min(8, Number(modelInfo?.switches) || 6));
@@ -9972,7 +10241,7 @@ function DemoControllerModal({
   const letter = String.fromCharCode(65 + (bankLetterIndex || 0));
   const tag = `${letter}${presetNumber || 1}`;
   const demoNames = ['CLEAN AMBIENT', 'CRUNCH', 'LEAD', 'MODULATION', 'DELAY', 'SOLO'];
-  const displayName = String(bankDisplayName || demoNames[presetNumber - 1] || `PRESET ${tag}`);
+  const displayName = String(displayMeta?.name?.trim() || bankDisplayName || demoNames[presetNumber - 1] || `PRESET ${tag}`);
   const liveModeName = (sw) => {
     const modeId = swModes?.[sw] || 'mute';
     const mode = SW_MODES.find((item) => item.id === modeId);
@@ -10038,6 +10307,15 @@ function DemoControllerModal({
     Array.from({ length: 6 }, (_, index) => index + 1)
       .filter((sw) => (swModes?.[sw] === 'spin') || activeLedPixels[sw]?.some(Boolean))
   );
+  // swModes/swParams/swDisplay sempre guardam o layer que esta aberto no
+  // editor; os objetos L2 sao o stash do outro. Reconstroi L1/L2 fisicos para
+  // o layout 4 do display ficar igual ao firmware.
+  const layer1 = editorLayer === 2
+    ? { modes: swModesL2, params: swParamsL2, display: swDisplayL2 }
+    : { modes: swModes, params: swParams, display: swDisplay };
+  const layer2 = editorLayer === 2
+    ? { modes: swModes, params: swParams, display: swDisplay }
+    : { modes: swModesL2, params: swParamsL2, display: swDisplayL2 };
 
   useEffect(() => {
     if (!open) return;
@@ -10048,6 +10326,7 @@ function DemoControllerModal({
 
   useEffect(() => {
     setActiveLedPixels(emptyLedPixels());
+    setLastSections(Array(9).fill(0));
     const nextSpinStates = Array(9).fill(-1);
     if (switchMode === 'live') {
       for (let sw = 1; sw <= 6; sw++) {
@@ -10077,6 +10356,11 @@ function DemoControllerModal({
           return;
         }
         const mask = primaryPixelMaskFor(sw);
+        setLastSections((current) => {
+          const next = [...current];
+          next[sw] = 0;
+          return next;
+        });
         setActiveLedPixels((current) => {
           const next = current.map((pixels) => [...pixels]);
           const turnOn = !mask.every((enabled, arc) => !enabled || next[sw][arc]);
@@ -10105,6 +10389,12 @@ function DemoControllerModal({
     setActiveLedPixels((current) => {
       const next = current.map((pixels) => [...pixels]);
       next[sw][arc] = !next[sw][arc];
+      return next;
+    });
+    setLastSections((current) => {
+      const next = [...current];
+      // Arcos visuais: superior esquerdo=A, inferior=B, superior direito=C.
+      next[sw] = arc === 0 ? 1 : arc === 2 ? 2 : 0;
       return next;
     });
   };
@@ -10136,33 +10426,19 @@ function DemoControllerModal({
   ];
 
   const virtualDisplay = (
-    <div className={`bf-demo-display${displayWide ? ' is-480' : ' is-320'}`}>
-      <div className="bf-demo-display-glass">
-        <div className="bf-demo-display-top">
-          <span>{switchMode === 'live' ? 'LIVE MODE' : 'PRESET MODE'}</span>
-          <span className="bf-demo-display-status">● LOCAL</span>
-        </div>
-        {switchMode === 'preset' ? (
-          <div className="bf-demo-display-preset">
-            <div className="bf-demo-display-tag">{tag}</div>
-            <div className="bf-demo-display-name">{displayName}</div>
-            <div className="bf-demo-display-meta">
-              <span>BANK {letter}</span><span>PRESET {presetNumber}</span><span>MIDI CH 1</span>
-            </div>
-          </div>
-        ) : (
-          <div className="bf-demo-display-live">
-            {Array.from({ length: Math.min(6, presetCount) }, (_, index) => index + 1).map((sw) => (
-              <div key={sw} className={'bf-demo-display-live-tile' + (activeSwitches.has(sw) ? ' is-on' : '')}
-                   style={{ '--switch-color': ledFor(sw) }}>
-                <span>SW{sw}</span>
-                <strong>{liveModeName(sw)}</strong>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
+    <Bfmidi480Display
+      model={model} switchMode={switchMode} gigView={gigView}
+      tag={tag} label={displayName} meta={displayMeta}
+      liveLayout={liveLayout} presetLayout={presetLayout}
+      liveCustomLayout={liveCustomLayout} presetCustomLayout={presetCustomLayout}
+      namePresetLive={namePresetLive} namePresetBank={namePresetBank}
+      iconShape={iconShape} presetIconShape={presetIconShape}
+      layer1={layer1} layer2={layer2}
+      editorLayer={editorLayer}
+      bankLetterEnabled={bankLetterEnabled}
+      activeLedPixels={activeLedPixels} spinStates={spinStates}
+      lastSections={lastSections}
+    />
   );
 
   return ReactDOM.createPortal(
@@ -17167,6 +17443,21 @@ function App() {
         switchLedColors={switchLedColors}
         liveLedColor={liveLedColor}
         brightness={brightness}
+        displayMeta={presetSaveRef.current?.meta || currentSavedMeta || DEFAULT_PRESET_META()}
+        liveLayout={liveLayout}
+        presetLayout={presetLayout}
+        liveCustomLayout={liveCustomLayout}
+        presetCustomLayout={presetCustomLayout}
+        namePresetLive={namePresetLive}
+        namePresetBank={namePresetBank}
+        iconShape={iconShape}
+        presetIconShape={presetIconShape}
+        gigView={gigView}
+        editorLayer={editorLayer}
+        swModesL2={swModesL2}
+        swParamsL2={swParamsL2}
+        swDisplayL2={swDisplayL2}
+        bankLetterEnabled={bankLetterEnabled}
       />
       {wifiResult && (
         <div className="bf-modal-backdrop" onClick={() => setWifiResult(null)}>
