@@ -10378,14 +10378,17 @@ function DemoControllerModal({
   } : /(?: 6S| 6SW\+)$/i.test(modelName) ? {
     id: '6sw', file: '6SW.svg', viewW: 15381.74, viewH: 5339.98,
     display: { x: 680, y: 1095, w: 4560, h: 3055 },
-    controlRadius: 421.7, ringRadius: 349, ringOutline: 155, ringFill: 126,
+    // O SVG tem recortes de raio 596,37. Antes o controle usava raio 421,7
+    // e centros 174,67 acima, ficando menor e deslocado dentro dos recortes.
+    // Mantem aqui as mesmas proporcoes visuais dos layouts NANO e MICRO.
+    controlRadius: 596.37, ringRadius: 493, ringOutline: 219, ringFill: 178,
     controls: [
-      { sw: 4, cx: 6499.5, cy: 1018.74, label: 'Footswitch 4' },
-      { sw: 5, cx: 10425.74, cy: 1018.74, label: 'Footswitch 5' },
-      { sw: 6, cx: 14367, cy: 1018.74, label: 'Footswitch 6' },
-      { sw: 1, cx: 6499.5, cy: 3880.12, label: 'Footswitch 1' },
-      { sw: 2, cx: 10425.74, cy: 3880.12, label: 'Footswitch 2' },
-      { sw: 3, cx: 14367, cy: 3880.12, label: 'Footswitch 3' },
+      { sw: 4, cx: 6499.5, cy: 1193.41, label: 'Footswitch 4' },
+      { sw: 5, cx: 10425.74, cy: 1193.41, label: 'Footswitch 5' },
+      { sw: 6, cx: 14367, cy: 1193.41, label: 'Footswitch 6' },
+      { sw: 1, cx: 6499.5, cy: 4054.79, label: 'Footswitch 1' },
+      { sw: 2, cx: 10425.74, cy: 4054.79, label: 'Footswitch 2' },
+      { sw: 3, cx: 14367, cy: 4054.79, label: 'Footswitch 3' },
     ],
   } : null;
   const hasControllerArtwork = !!artworkInfo;
