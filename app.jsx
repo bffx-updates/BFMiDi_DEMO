@@ -9963,7 +9963,7 @@ function DemoControllerModal({
   const modelInfo = MODELS.find((item) => item.id === model) || MODELS[0];
   const switchCount = Math.max(4, Math.min(8, Number(modelInfo?.switches) || 6));
   const displayWide = String(model).startsWith('BFMIDI-3');
-  const hasSevenSwitchArtwork = model === 'BFMIDI-3 7SW+';
+  const hasSevenSwitchArtwork = /^BFMIDI-3 7SW\+?$/i.test(String(model).trim());
   const letter = String.fromCharCode(65 + (bankLetterIndex || 0));
   const tag = `${letter}${presetNumber || 1}`;
   const demoNames = ['CLEAN AMBIENT', 'CRUNCH', 'LEAD', 'MODULATION', 'DELAY', 'SOLO'];
@@ -10007,18 +10007,18 @@ function DemoControllerModal({
     if (sw === 8) onSetSwitchMode(switchMode === 'live' ? 'preset' : 'live');
   };
 
-  // Posicoes medidas diretamente no viewBox 8853.8 x 6898.93 do 7SW.svg.
+  // Coordenadas originais do viewBox 8853.8 x 6898.93 do 7SW.svg.
   // Na 7SW+, o controle 8 corresponde ao footswitch LIVE/MODE e o controle 7
   // representa o seletor/encoder SW1/2 + EXP.
   const sevenSwitchControls = [
-    { sw: 8, x: 13.16, y: 16.23, label: 'LIVE / MODE' },
-    { sw: 7, x: 86.99, y: 16.23, label: 'Seletor SW1/2 e EXP' },
-    { sw: 4, x: 13.16, y: 50.49, label: 'Footswitch 4' },
-    { sw: 5, x: 50.07, y: 50.69, label: 'Footswitch 5' },
-    { sw: 6, x: 86.99, y: 50.69, label: 'Footswitch 6' },
-    { sw: 1, x: 13.16, y: 85.38, label: 'Footswitch 1' },
-    { sw: 2, x: 50.07, y: 85.38, label: 'Footswitch 2' },
-    { sw: 3, x: 86.99, y: 85.38, label: 'Footswitch 3' },
+    { sw: 8, cx: 1164.92, cy: 1119.37, label: 'LIVE / MODE' },
+    { sw: 7, cx: 7701.56, cy: 1119.37, label: 'Seletor SW1/2 e EXP' },
+    { sw: 4, cx: 1164.92, cy: 3483.35, label: 'Footswitch 4' },
+    { sw: 5, cx: 4433.24, cy: 3496.91, label: 'Footswitch 5' },
+    { sw: 6, cx: 7701.56, cy: 3496.91, label: 'Footswitch 6' },
+    { sw: 1, cx: 1164.92, cy: 5890.22, label: 'Footswitch 1' },
+    { sw: 2, cx: 4433.24, cy: 5890.22, label: 'Footswitch 2' },
+    { sw: 3, cx: 7701.56, cy: 5890.22, label: 'Footswitch 3' },
   ];
 
   const virtualDisplay = (
@@ -10085,26 +10085,34 @@ function DemoControllerModal({
               <img className="bf-demo-seven-switch-art" src="icons/controllers/7SW.svg"
                    alt="Desenho da controladora BFMIDI-3 7SW+" draggable="false" />
               <div className="bf-demo-seven-switch-display">{virtualDisplay}</div>
-              {sevenSwitchControls.map(({ sw, x, y, label }) => {
-                const disabled = sw <= 6 && sw > presetCount;
-                const isActive = sw === 8
-                  ? switchMode === 'live'
-                  : switchMode === 'preset' ? sw === presetNumber : activeSwitches.has(sw);
-                return (
-                  <button key={sw} type="button"
-                    className={'bf-demo-seven-switch-control' + (isActive ? ' is-active' : '') +
-                      (pressedSwitch === sw ? ' is-pressed' : '') + (disabled ? ' is-disabled' : '')}
-                    style={{ left: `${x}%`, top: `${y}%`, '--led-color': ledFor(sw) }}
-                    onPointerDown={() => setPressedSwitch(sw)}
-                    onPointerUp={() => setPressedSwitch(0)}
-                    onPointerCancel={() => setPressedSwitch(0)}
-                    onClick={() => !disabled && press(sw)}
-                    disabled={disabled}
-                    aria-label={label}>
-                    <span />
-                  </button>
-                );
-              })}
+              <svg className="bf-demo-seven-switch-controls" viewBox="0 0 8853.8 6898.93"
+                   preserveAspectRatio="xMidYMid meet" aria-label="Controles interativos da 7SW+">
+                {sevenSwitchControls.map(({ sw, cx, cy, label }) => {
+                  const disabled = sw <= 6 && sw > presetCount;
+                  const isActive = sw === 8
+                    ? switchMode === 'live'
+                    : switchMode === 'preset' ? sw === presetNumber : activeSwitches.has(sw);
+                  return (
+                    <g key={sw} role="button" tabIndex={disabled ? -1 : 0}
+                       aria-label={label} aria-disabled={disabled ? 'true' : 'false'}
+                       onPointerDown={() => !disabled && setPressedSwitch(sw)}
+                       onPointerUp={() => setPressedSwitch(0)}
+                       onPointerCancel={() => setPressedSwitch(0)}
+                       onClick={() => !disabled && press(sw)}
+                       onKeyDown={(event) => {
+                         if (!disabled && (event.key === 'Enter' || event.key === ' ')) {
+                           event.preventDefault();
+                           press(sw);
+                         }
+                       }}>
+                      <circle cx={cx} cy={cy} r="515.9"
+                        className={'bf-demo-seven-switch-control' + (isActive ? ' is-active' : '') +
+                          (pressedSwitch === sw ? ' is-pressed' : '') + (disabled ? ' is-disabled' : '')}
+                        style={{ '--led-color': ledFor(sw) }} />
+                    </g>
+                  );
+                })}
+              </svg>
             </div>
           ) : (<>
           <div className="bf-demo-brandline">
