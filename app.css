@@ -5943,6 +5943,236 @@ button.bf-select-btn {
 
 .bf-demo-modal-head,
 .bf-demo-toolbar,
+/* Monitor MIDI da controladora virtual. Fica abaixo da placa e mostra a mesma
+   acao em linguagem de palco ou como bytes MIDI brutos. */
+.bf-demo-midi-monitor {
+  margin: 0 clamp(18px, 3vw, 36px) clamp(18px, 3vw, 30px);
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.11);
+  border-radius: 17px;
+  background:
+    linear-gradient(180deg, rgba(18,20,24,.98), rgba(9,10,13,.99)) padding-box,
+    linear-gradient(135deg, rgba(255,255,255,.14), rgba(255,122,26,.12)) border-box;
+  box-shadow: inset 0 1px rgba(255,255,255,.055), 0 14px 32px rgba(0,0,0,.27);
+}
+.bf-demo-midi-monitor-head {
+  min-height: 68px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 15px;
+  border-bottom: 1px solid rgba(255,255,255,.075);
+  background: rgba(255,255,255,.018);
+}
+.bf-demo-midi-monitor-title {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+.bf-demo-midi-monitor-title > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.bf-demo-midi-monitor-title span:not(.bf-demo-midi-monitor-pulse) {
+  color: #ff8a3a;
+  font: 900 11px/1 ui-monospace, "Cascadia Mono", monospace;
+  letter-spacing: .18em;
+}
+.bf-demo-midi-monitor-title small {
+  color: rgba(255,255,255,.42);
+  font: 650 10px/1.2 system-ui, sans-serif;
+}
+.bf-demo-midi-monitor-pulse {
+  width: 9px;
+  height: 9px;
+  flex: none;
+  border-radius: 50%;
+  background: #49df82;
+  box-shadow: 0 0 0 4px rgba(73,223,130,.09), 0 0 14px rgba(73,223,130,.54);
+}
+.bf-demo-midi-monitor-actions,
+.bf-demo-midi-monitor-modes {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.bf-demo-midi-monitor-modes {
+  padding: 3px;
+  gap: 3px;
+  border: 1px solid rgba(255,255,255,.09);
+  border-radius: 10px;
+  background: #08090c;
+}
+.bf-demo-midi-monitor-modes button,
+.bf-demo-midi-monitor-clear {
+  appearance: none;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: rgba(255,255,255,.46);
+  font: 850 9px/1 system-ui, sans-serif;
+  letter-spacing: .08em;
+  cursor: pointer;
+}
+.bf-demo-midi-monitor-modes button.is-on {
+  background: rgba(255,122,26,.15);
+  color: #ff9b5b;
+  box-shadow: inset 0 0 0 1px rgba(255,122,26,.36);
+}
+.bf-demo-midi-monitor-clear {
+  border: 1px solid rgba(255,255,255,.1);
+}
+.bf-demo-midi-monitor-clear:disabled { opacity: .28; cursor: default; }
+.bf-demo-midi-monitor-body {
+  max-height: 350px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: rgba(255,122,26,.5) transparent;
+}
+.bf-demo-midi-monitor-empty {
+  padding: 34px 18px;
+  color: rgba(255,255,255,.34);
+  text-align: center;
+  font: 650 11px/1.5 ui-monospace, "Cascadia Mono", monospace;
+}
+.bf-demo-midi-event {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  gap: 12px;
+  padding: 14px 16px;
+}
+.bf-demo-midi-event + .bf-demo-midi-event {
+  border-top: 1px dashed rgba(255,255,255,.09);
+}
+.bf-demo-midi-event-time {
+  padding-top: 3px;
+  color: rgba(255,255,255,.3);
+  font: 700 10px/1 ui-monospace, "Cascadia Mono", monospace;
+  letter-spacing: .04em;
+}
+.bf-demo-midi-event-content { min-width: 0; }
+.bf-demo-midi-event-headline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  color: rgba(255,255,255,.72);
+  font: 760 12px/1.2 system-ui, sans-serif;
+}
+.bf-demo-midi-event-headline strong {
+  color: #ff8a3a;
+  font: 900 11px/1 ui-monospace, "Cascadia Mono", monospace;
+  letter-spacing: .08em;
+}
+.bf-demo-midi-event-headline em,
+.bf-demo-midi-event-headline b {
+  padding: 3px 6px;
+  border-radius: 5px;
+  font: 900 8px/1 ui-monospace, "Cascadia Mono", monospace;
+  letter-spacing: .1em;
+  font-style: normal;
+}
+.bf-demo-midi-event-headline em { background: rgba(255,255,255,.06); color: rgba(255,255,255,.5); }
+.bf-demo-midi-event-headline b.is-on { background: rgba(73,223,130,.13); color: #61e991; }
+.bf-demo-midi-event-headline b.is-off { background: rgba(255,100,80,.12); color: #ff8c78; }
+.bf-demo-midi-event-trigger {
+  margin-top: 5px;
+  color: rgba(255,255,255,.4);
+  font: 650 10px/1.2 system-ui, sans-serif;
+}
+.bf-demo-midi-friendly-list,
+.bf-demo-midi-raw-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+.bf-demo-midi-friendly-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 33px minmax(120px, 1fr) auto minmax(88px, auto);
+  align-items: center;
+  gap: 9px;
+  padding: 8px 9px;
+  border-radius: 9px;
+  background: rgba(255,255,255,.035);
+}
+.bf-demo-midi-kind {
+  padding: 4px 0;
+  border-radius: 5px;
+  text-align: center;
+  color: #ff9b5b;
+  background: rgba(255,122,26,.12);
+  font: 900 9px/1 ui-monospace, "Cascadia Mono", monospace;
+}
+.bf-demo-midi-kind.is-pc { color: #79a7ff; background: rgba(68,118,255,.13); }
+.bf-demo-midi-friendly-main,
+.bf-demo-midi-friendly-target {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.bf-demo-midi-friendly-main strong {
+  overflow: hidden;
+  color: rgba(255,255,255,.82);
+  font: 760 11px/1.2 system-ui, sans-serif;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bf-demo-midi-friendly-main small,
+.bf-demo-midi-friendly-target small {
+  overflow: hidden;
+  color: rgba(255,255,255,.38);
+  font: 650 9px/1.15 system-ui, sans-serif;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bf-demo-midi-friendly-value {
+  color: #61e991;
+  font: 900 9px/1 ui-monospace, "Cascadia Mono", monospace;
+  letter-spacing: .06em;
+}
+.bf-demo-midi-friendly-target {
+  color: rgba(255,255,255,.63);
+  font: 850 9px/1 ui-monospace, "Cascadia Mono", monospace;
+  letter-spacing: .05em;
+}
+.bf-demo-midi-raw-row {
+  display: grid;
+  grid-template-columns: minmax(112px, auto) 1fr auto;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+  padding: 8px 9px;
+  border-radius: 8px;
+  background: #050609;
+  border: 1px solid rgba(255,255,255,.055);
+}
+.bf-demo-midi-raw-row code {
+  color: #72e69a;
+  font: 850 11px/1 ui-monospace, "Cascadia Mono", monospace;
+  letter-spacing: .08em;
+}
+.bf-demo-midi-raw-row span {
+  color: rgba(255,255,255,.61);
+  font: 700 10px/1.2 ui-monospace, "Cascadia Mono", monospace;
+}
+.bf-demo-midi-raw-row small {
+  color: rgba(255,255,255,.3);
+  font: 700 8px/1 ui-monospace, "Cascadia Mono", monospace;
+}
+.bf-demo-midi-no-output {
+  margin-top: 8px;
+  color: rgba(255,255,255,.3);
+  font: 650 10px/1.4 ui-monospace, "Cascadia Mono", monospace;
+}
+
 .bf-demo-modal-foot {
   display: flex;
   align-items: center;
@@ -6419,6 +6649,16 @@ button.bf-select-btn {
   .bf-demo-controller.is-6sw .bf-demo-foots { grid-template-columns: repeat(3, 1fr); gap: 18px 10px; }
   .bf-demo-controller.is-8sw .bf-demo-foots { grid-template-columns: repeat(4, 1fr); gap: 18px 6px; }
   .bf-demo-foot-metal { width: clamp(38px, 12vw, 56px); }
+  .bf-demo-midi-monitor { margin: 0 14px 18px; }
+  .bf-demo-midi-monitor-head { align-items: flex-start; flex-direction: column; }
+  .bf-demo-midi-monitor-actions { width: 100%; }
+  .bf-demo-midi-monitor-modes { flex: 1; }
+  .bf-demo-midi-monitor-modes button { flex: 1; padding-inline: 7px; }
+  .bf-demo-midi-event { grid-template-columns: 1fr; gap: 6px; padding: 13px 12px; }
+  .bf-demo-midi-event-time { padding: 0; }
+  .bf-demo-midi-friendly-row { grid-template-columns: 32px minmax(0, 1fr) auto; }
+  .bf-demo-midi-friendly-target { grid-column: 2 / -1; }
+  .bf-demo-midi-raw-row { grid-template-columns: 1fr; gap: 5px; }
   .bf-demo-modal-foot { align-items: flex-start; flex-direction: column; padding: 15px 16px 22px; }
 }
 

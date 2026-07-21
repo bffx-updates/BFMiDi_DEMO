@@ -3094,14 +3094,19 @@ function buildSnapshotStomp(sw, id, userParams) {
       : true;  // default STOMP antigo: dispara no preset
     if (!atPreset) continue;
     const num = Number(p['num' + suf]);
+    const asPc = Number(p['aspc' + suf]) === 1;
     const custom = p['custom' + suf] === 1;
     const onV = custom ? Number(p['on' + suf]) : 127;
     const offV = custom ? Number(p['off' + suf]) : 0;
-    const startOn = Number(p['start' + suf]) === 1;
+    const startOn = (Number(p['start' + suf]) === 1) !==
+      (Number(p['inv' + suf]) === 1);
+    const value = asPc
+      ? Number(p[(startOn ? 'on' : 'off') + suf])
+      : (startOn ? onV : offV);
     sections.push({
       label: tierLabel(s),
       flags: [startOn ? tr(BF_I18N.language, 'sw.startOn') : tr(BF_I18N.language, 'sw.startOff')],
-      messages: [ccMsg(ch, num, startOn ? onV : offV)],
+      messages: value < 0 ? [] : [asPc ? pcMsg(ch, value) : ccMsg(ch, num, value)],
     });
   }
   return { sw, modeLabel: 'STOMP', sections };
@@ -3172,7 +3177,7 @@ function buildSnapshotMacros(sw, userParams) {
   const slots = parseMslots(p.mslots || '');
   const active = slots.filter(chOK);
   if (active.length === 0) return { sw, modeLabel: 'MACROS', sections: [] };
-  const startOn = p.start === 1;
+  const startOn = (Number(p.start) === 1) !== (Number(p.inv) === 1);
   const messages = [];
   for (const slot of active) {
     const v = startOn ? slot.on : slot.off;
@@ -3371,13 +3376,18 @@ function buildLivePressEvent(sw, section, nowOn, savedSwModes, savedSwParams) {
       return { sw, modeLabel: 'STOMP', sectionLabel: tierLabel(section),
                on: nowOn, messages: [] };
     }
+    const asPc = Number(p['aspc' + suf]) === 1;
     const custom = Number(p['custom' + suf]) === 1;
     const onV = Number(p['on' + suf]);
     const offV = Number(p['off' + suf]);
-    const value = custom ? (nowOn ? onV : offV) : (nowOn ? 127 : 0);
+    const value = asPc
+      ? (nowOn ? onV : offV)
+      : (custom ? (nowOn ? onV : offV) : (nowOn ? 127 : 0));
     return {
       sw, modeLabel: 'STOMP', sectionLabel: tierLabel(section), on: nowOn,
-      messages: [ccMsg(ch, Number(p['num' + suf]), value)],
+      messages: value < 0 ? [] : [asPc
+        ? pcMsg(ch, value)
+        : ccMsg(ch, Number(p['num' + suf]), value)],
     };
   }
 
@@ -3459,6 +3469,21 @@ function buildLivePressEvent(sw, section, nowOn, savedSwModes, savedSwParams) {
     return null;
   }
 
+  if (id === 'spin' && section === 1) {
+    const p = { ...DEFAULT_SW_PARAMS('spin'), ...(userParams || {}) };
+    const ch = Number(p.lp_ch) || 0;
+    if (ch < 1 || ch > 16) {
+      return { sw, modeLabel: 'SPIN', sectionLabel: 'LONG PRESS',
+               on: nowOn, messages: [] };
+    }
+    const onValue = typeof p.lp_on !== 'undefined' ? Number(p.lp_on) : 127;
+    const offValue = Number(p.lp_off) || 0;
+    return {
+      sw, modeLabel: 'SPIN', sectionLabel: 'LONG PRESS', on: nowOn,
+      messages: [ccMsg(ch, Number(p.lp_num) || 0, nowOn ? onValue : offValue)],
+    };
+  }
+
   if (id === 'spin' && section === 0) {
     // SPIN — nowOn carrega o stateIndex (0/1/2). Cada estado dispara
     // TODOS os slots configurados (ate 3 CCs simultaneos).
@@ -3514,12 +3539,13 @@ function buildLivePressEvent(sw, section, nowOn, savedSwModes, savedSwParams) {
     };
   }
 
-  if (id === 'single' && section === 0) {
+  if (id === 'single' && section >= 0 && section <= 2) {
     const p = { ...DEFAULT_SW_PARAMS('single'), ...(userParams || {}) };
-    const slotsFromSslots = parseSingleSlots(p.sslots || '');
+    const slotField = section === 1 ? 'lslots' : section === 2 ? 'rslots' : 'sslots';
+    const slotsFromSslots = parseSingleSlots(p[slotField] || '');
     const sslotsHasAny = slotsFromSslots.some((s) => s.ch >= 1 && s.ch <= 16);
     const slots = slotsFromSslots.slice();
-    if (!sslotsHasAny && Number(p.ch) >= 1 && Number(p.ch) <= 16) {
+    if (section === 0 && !sslotsHasAny && Number(p.ch) >= 1 && Number(p.ch) <= 16) {
       slots[0] = {
         t: Number(p.as_pc) === 1 ? 1 : 0,
         ch: Number(p.ch),
@@ -3533,7 +3559,9 @@ function buildLivePressEvent(sw, section, nowOn, savedSwModes, savedSwParams) {
       .filter((s) => s.ch >= 1 && s.ch <= 16)
       .map((s) => s.t === 1 ? pcMsg(s.ch, s.val) : ccMsg(s.ch, s.num, s.val));
     return {
-      sw, modeLabel: 'SINGLE', sectionLabel: '', on: null,
+      sw, modeLabel: 'SINGLE',
+      sectionLabel: section === 1 ? 'LONGO' : section === 2 ? 'DUPLO' : '',
+      on: null,
       messages,
     };
   }
@@ -10294,6 +10322,172 @@ function Bfmidi480Display({
   );
 }
 
+function demoMidiMonitorTime() {
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2, '0')}:${
+    String(now.getMinutes()).padStart(2, '0')}:${
+    String(now.getSeconds()).padStart(2, '0')}`;
+}
+
+function demoMidiTargetName(channel) {
+  return pedalNameForChannel(Number(channel)) || 'MIDI GLOBAL';
+}
+
+function demoMidiCcName(message) {
+  const channel = Number(message.ch);
+  const num = Number(message.num);
+  if (isKemperChannel(channel)) {
+    const special = KEMPER_NRPN_CCS.find((entry) => Number(entry.value) === num);
+    if (special) return special.label;
+  }
+  const pedal = pedalEntryForChannel(channel);
+  return pedal?.cc && CC_LABELS[pedal.cc]?.[num]
+    ? CC_LABELS[pedal.cc][num] : `Controle ${num}`;
+}
+
+function demoMidiPcName(message) {
+  const channel = Number(message.ch);
+  const program = Number(message.pc);
+  const pedal = pedalEntryForChannel(channel);
+  return pedal?.pc && PC_LABELS[pedal.pc]?.[program]
+    ? PC_LABELS[pedal.pc][program] : `Preset ${program}`;
+}
+
+function demoMidiValueName(message) {
+  const def = valueLabelsFor(Number(message.ch), Number(message.num));
+  const value = Number(message.val);
+  return def?.labels?.[value] || (value === 127 ? 'ON' : value === 0 ? 'OFF' : String(value));
+}
+
+function demoMidiHex(bytes) {
+  return bytes.map((value) => (Number(value) & 0xFF).toString(16).padStart(2, '0').toUpperCase()).join(' ');
+}
+
+// Traduz a mensagem logica usada pelo editor para os bytes que o firmware
+// realmente coloca no cabo. PC logico sempre vira CC#0 (bank MSB) + PC; a
+// excecao VALETON GP5 usa somente CC#0, exatamente como swBankSendPcLogical.
+function demoMidiRawPackets(message) {
+  const ch = clamp(Number(message.ch) || 0, 0, 16);
+  if (!ch) return [];
+  const statusCc = 0xB0 | (ch - 1);
+  const statusPc = 0xC0 | (ch - 1);
+  if (message.kind === 'pc') {
+    const logical = clamp(Number(message.pc) || 0, 0, 16383);
+    if (/VALETON GP5/i.test(demoMidiTargetName(ch))) {
+      if (logical > 99) return [];
+      return [{ bytes: [statusCc, 0, logical], detail: `CC 0 = ${logical} · CH ${ch}` }];
+    }
+    return [
+      { bytes: [statusCc, 0, Math.floor(logical / 128)], detail: `BANK MSB ${Math.floor(logical / 128)} · CH ${ch}` },
+      { bytes: [statusPc, logical % 128], detail: `PC ${logical % 128} · CH ${ch}` },
+    ];
+  }
+  if (message.kind !== 'cc') return [];
+  const num = Number(message.num);
+  const val = Number(message.val) & 0x7F;
+  if (num >= 200 && num <= 321 && isKemperChannel(ch)) {
+    return [{ bytes: null, detail: `NRPN KEMPER ${num} · VAL ${val} · CH ${ch}` }];
+  }
+  if (num < 0 || num > 127) return [];
+  return [{ bytes: [statusCc, num, val], detail: `CC ${num} = ${val} · CH ${ch}` }];
+}
+
+function DemoMidiMonitorCard({ events, mode, onSetMode, onClear }) {
+  const list = Array.isArray(events) ? events : [];
+  return (
+    <section className="bf-demo-midi-monitor" aria-label="Monitor MIDI da controladora virtual">
+      <header className="bf-demo-midi-monitor-head">
+        <div className="bf-demo-midi-monitor-title">
+          <span className="bf-demo-midi-monitor-pulse" aria-hidden="true" />
+          <div>
+            <span>MONITOR MIDI</span>
+            <small>Saída simulada da controladora</small>
+          </div>
+        </div>
+        <div className="bf-demo-midi-monitor-actions">
+          <div className="bf-demo-midi-monitor-modes" role="group" aria-label="Visualização do monitor MIDI">
+            <button type="button" className={mode === 'friendly' ? 'is-on' : ''}
+                    onClick={() => onSetMode('friendly')}>AMIGÁVEL</button>
+            <button type="button" className={mode === 'raw' ? 'is-on' : ''}
+                    onClick={() => onSetMode('raw')}>AVANÇADO · MIDI PURO</button>
+          </div>
+          <button type="button" className="bf-demo-midi-monitor-clear" onClick={onClear}
+                  disabled={!list.length}>LIMPAR</button>
+        </div>
+      </header>
+
+      <div className="bf-demo-midi-monitor-body" aria-live="polite">
+        {!list.length ? (
+          <div className="bf-demo-midi-monitor-empty">
+            Acione um preset ou um switch para ver o MIDI enviado.
+          </div>
+        ) : list.map((event) => {
+          const messages = Array.isArray(event.messages) ? event.messages : [];
+          const state = event.on === true ? 'ON' : event.on === false ? 'OFF' : '';
+          return (
+            <article key={event.id} className={`bf-demo-midi-event is-${event.kind}`}>
+              <div className="bf-demo-midi-event-time">{event.time}</div>
+              <div className="bf-demo-midi-event-content">
+                <div className="bf-demo-midi-event-headline">
+                  {event.kind === 'preset' ? (
+                    <><strong>PRESET {event.tag}</strong><span>{event.name}</span></>
+                  ) : (
+                    <>
+                      <strong>SWITCH {event.sw}</strong>
+                      <span>{event.modeLabel || 'MIDI'}</span>
+                      {event.sectionLabel && <em>{event.sectionLabel}</em>}
+                      {state && <b className={state === 'ON' ? 'is-on' : 'is-off'}>{state}</b>}
+                    </>
+                  )}
+                </div>
+                {event.kind === 'preset' && Number(event.triggerSw) > 0 && (
+                  <div className="bf-demo-midi-event-trigger">Chamado pelo Switch {event.triggerSw}</div>
+                )}
+                {!messages.length ? (
+                  <div className="bf-demo-midi-no-output">Nenhuma mensagem MIDI foi enviada.</div>
+                ) : mode === 'friendly' ? (
+                  <div className="bf-demo-midi-friendly-list">
+                    {messages.map((message, index) => {
+                      const device = demoMidiTargetName(message.ch);
+                      const main = message.kind === 'pc'
+                        ? demoMidiPcName(message) : demoMidiCcName(message);
+                      const value = message.kind === 'cc' ? demoMidiValueName(message) : '';
+                      return (
+                        <div key={index} className="bf-demo-midi-friendly-row">
+                          <span className={`bf-demo-midi-kind is-${message.kind}`}>{message.kind === 'pc' ? 'PC' : 'CC'}</span>
+                          <span className="bf-demo-midi-friendly-main">
+                            <strong>{message.source || main}</strong>
+                            {message.source && <small>{main}</small>}
+                          </span>
+                          {value && <span className="bf-demo-midi-friendly-value">{value}</span>}
+                          <span className="bf-demo-midi-friendly-target">CANAL {message.ch}<small>{device}</small></span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="bf-demo-midi-raw-list">
+                    {messages.flatMap((message, messageIndex) => {
+                      const packets = demoMidiRawPackets(message);
+                      return packets.map((packet, packetIndex) => (
+                        <div key={`${messageIndex}-${packetIndex}`} className="bf-demo-midi-raw-row">
+                          <code>{packet.bytes ? demoMidiHex(packet.bytes) : 'NRPN'}</code>
+                          <span>{packet.detail}</span>
+                          {message.source && <small>{message.source}</small>}
+                        </div>
+                      ));
+                    })}
+                  </div>
+                )}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function DemoControllerModal({
   open, onClose, model, switchMode, onSetSwitchMode,
   bankLetterIndex, presetNumber, bankDisplayName, presetCount,
@@ -10326,6 +10520,10 @@ function DemoControllerModal({
   const [bpmOverlay, setBpmOverlay] = useState({ visible: false, bpm: 0, untilMs: 0 });
   const [bankPreview, setBankPreview] = useState(null);
   const [pressedSwitch, setPressedSwitch] = useState(0);
+  const [midiMonitorMode, setMidiMonitorMode] = useState('friendly');
+  const [midiMonitorEvents, setMidiMonitorEvents] = useState([]);
+  const midiMonitorSeqRef = useRef(0);
+  const midiMonitorWasOpenRef = useRef(false);
   const longPressTimerRef = useRef(null);
   const suppressClickRef = useRef(false);
   const clickTimersRef = useRef({});
@@ -10504,6 +10702,125 @@ function DemoControllerModal({
     ? { modes: swModes, params: swParams, display: swDisplay }
     : { modes: swModesL2, params: swParamsL2, display: swDisplayL2 };
 
+  const appendMidiMonitorEvent = (event) => {
+    if (!event) return;
+    midiMonitorSeqRef.current += 1;
+    const nextEvent = {
+      ...event,
+      id: `${Date.now()}-${midiMonitorSeqRef.current}`,
+      time: demoMidiMonitorTime(),
+    };
+    setMidiMonitorEvents((current) => [nextEvent, ...current].slice(0, 24));
+  };
+
+  const presetMonitorEvent = (targetPreset, targetBank, triggerSw = 0) => {
+    const safeBank = clamp(Number(targetBank) || 0, 0, BANK_LETTER_COUNT - 1);
+    const safePreset = clamp(Number(targetPreset) || 1, 1, presetCount);
+    const targetTag = `${BANK_LETTERS[safeBank] || 'A'}${safePreset}`;
+    const snapshot = getDemoSnapshot();
+    const rawPreset = snapshot?.presets?.[targetTag] || null;
+    const rawMeta = rawPreset?.meta || {};
+    const meta = rawPreset ? metaFromApi(rawMeta) : visualDisplayMeta;
+    const messages = [];
+    const mainCh = Number(meta?.channel) || 0;
+    if (mainCh >= 1 && mainCh <= 16) {
+      messages.push({ ...pcMsg(mainCh, Number(meta?.bank) || 0), source: 'HEADER DO PRESET' });
+    }
+    (meta?.extraPcs || []).forEach((entry, index) => {
+      const ch = Number(entry.ch);
+      if (ch >= 1 && ch <= 16) {
+        messages.push({ ...pcMsg(ch, Number(entry.program) || 0), source: `PC EXTRA ${index + 1}` });
+      }
+    });
+    (meta?.extraCcs || []).forEach((entry, index) => {
+      const ch = Number(entry.ch);
+      if (ch >= 1 && ch <= 16) {
+        messages.push({ ...ccMsg(ch, Number(entry.ctrl) || 0, Number(entry.value) || 0), source: `CC EXTRA ${index + 1}` });
+      }
+    });
+
+    const parsedParams = rawPreset
+      ? parseSwParamsObjByLayer(snapshot?.swParams?.[targetTag] || {})
+      : { l1: layer1.params || {}, l2: layer2.params || {} };
+    const modesL1 = rawPreset
+      ? parseSwModesStr(rawMeta.sw_modes || '') : (layer1.modes || {});
+    const modesL2 = rawPreset
+      ? parseSwModesStr(rawMeta.sw_modes_l2 || '') : (layer2.modes || {});
+    const addInitialLayerMidi = (modes, params, layerLabel) => {
+      for (let sw = 1; sw <= 6; sw++) {
+        const modeId = modes?.[sw] || 'mute';
+        const modeParams = params?.[sw]?.[modeId];
+        const entry = buildSnapshotSwEntry(sw, modeId, modeParams);
+        (entry.sections || []).forEach((section) => {
+          const reactiveOnly = (section.flags || []).some((flag) =>
+            String(flag).includes('@ PRESS') || String(flag).includes('@ HOLD'));
+          if (reactiveOnly) return;
+          (section.messages || []).forEach((message) => {
+            messages.push({
+              ...message,
+              source: `${layerLabel} · SWITCH ${sw} · ${entry.modeLabel}`,
+            });
+          });
+        });
+      }
+    };
+    addInitialLayerMidi(modesL1, parsedParams.l1, 'LAYER 1');
+    if (Number(rawMeta.layer2 ?? meta?.layer2) === 1) {
+      addInitialLayerMidi(modesL2, parsedParams.l2, 'LAYER 2');
+    }
+    return {
+      kind: 'preset', tag: targetTag,
+      name: String(meta?.name || targetTag), triggerSw, messages,
+    };
+  };
+
+  const selectPresetWithMonitor = (targetPreset, targetBank, triggerSw = 0) => {
+    appendMidiMonitorEvent(presetMonitorEvent(targetPreset, targetBank, triggerSw));
+    return onSelectPreset(targetPreset, targetBank);
+  };
+
+  const navigateBankWithMonitor = (direction) => {
+    const targetBank = nextEnabledBank(bankLetterIndex, direction);
+    appendMidiMonitorEvent(presetMonitorEvent(presetNumber, targetBank));
+    return direction > 0 ? onNextBank() : onPreviousBank();
+  };
+
+  const switchMonitorEvent = (sw, section, modeId, params, pixels, spinState) => {
+    let nextState = null;
+    if (modeId === 'spin' && section === 0) {
+      nextState = spinState < 0 ? 0 : (spinState + 1) % 3;
+    } else if (modeId === 'spin' && section === 1) {
+      if (sw <= 6) {
+        const activeArc = spinState === 1 ? 0 : spinState === 2 ? 2 : 1;
+        nextState = !pixels?.some((value, arc) => arc !== activeArc && value);
+      } else {
+        nextState = !pixels?.some(Boolean);
+      }
+    } else if (modeId === 'fx1' || modeId === 'fx2' || modeId === 'fx3' ||
+               modeId === 'macros' || modeId === 'ramp') {
+      if (sw <= 6) {
+        const mask = section === 1 ? [true, false, false]
+          : section === 2 ? [false, false, true] : primaryPixelMaskFor(sw);
+        nextState = !mask.every((enabled, arc) => !enabled || pixels?.[arc]);
+      } else {
+        nextState = !pixels?.some(Boolean);
+      }
+    } else if (modeId === 'tap_tempo' && section === 1) {
+      nextState = !pixels?.some(Boolean);
+    }
+    const modes = { [sw]: modeId };
+    const paramsMap = { [sw]: { [modeId]: params } };
+    const event = buildLivePressEvent(sw, section, nextState, modes, paramsMap);
+    if (!event) return null;
+    const messages = (event.messages || []).filter((message) => {
+      if (message.kind === 'pc' || message.kind === 'fav') return true;
+      const num = Number(message.num);
+      if (num >= 0 && num <= 127) return true;
+      return num >= 200 && num <= 321 && isKemperChannel(Number(message.ch));
+    });
+    return { ...event, kind: 'switch', messages };
+  };
+
   const liveButtonTap = () => {
     if (switchMode === 'preset') {
       onSetEditorLayer?.(1);
@@ -10519,10 +10836,10 @@ function DemoControllerModal({
 
   const runSpecialCommand = (num) => {
     const command = Number(num);
-    if (command === 128) { onNextBank(); return true; }
-    if (command === 129) { onPreviousBank(); return true; }
-    if (command === 130) { onSelectPreset((presetNumber % presetCount) + 1, bankLetterIndex); return true; }
-    if (command === 131) { onSelectPreset(((presetNumber + presetCount - 2) % presetCount) + 1, bankLetterIndex); return true; }
+    if (command === 128) { navigateBankWithMonitor(1); return true; }
+    if (command === 129) { navigateBankWithMonitor(-1); return true; }
+    if (command === 130) { selectPresetWithMonitor((presetNumber % presetCount) + 1, bankLetterIndex); return true; }
+    if (command === 131) { selectPresetWithMonitor(((presetNumber + presetCount - 2) % presetCount) + 1, bankLetterIndex); return true; }
     if (command === 132) { onSetSwitchMode('preset'); return true; }
     if (command === 133) {
       if (switchMode === 'live' && layer2Enabled) onSetEditorLayer?.(editorLayer === 2 ? 1 : 2);
@@ -10549,6 +10866,22 @@ function DemoControllerModal({
     }
     return handled;
   };
+
+  useEffect(() => {
+    if (open && !midiMonitorWasOpenRef.current) {
+      midiMonitorWasOpenRef.current = true;
+      midiMonitorSeqRef.current = 0;
+      setMidiMonitorMode('friendly');
+      const initial = presetMonitorEvent(presetNumber, bankLetterIndex);
+      setMidiMonitorEvents([{
+        ...initial,
+        id: `${Date.now()}-0`,
+        time: demoMidiMonitorTime(),
+      }]);
+    } else if (!open) {
+      midiMonitorWasOpenRef.current = false;
+    }
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -10794,12 +11127,12 @@ function DemoControllerModal({
     });
   };
 
-  const configuredFavorite = (params, section) => {
+  const configuredFavorite = (params, section, sw = 0) => {
     const suffix = section === 1 ? '2' : section === 2 ? '3' : '';
     if (Number(params[`fav${suffix}`]) !== 1) return false;
     const targetBank = clamp(params[`fav_bank${suffix}`], 0, BANK_LETTER_COUNT - 1);
     const targetPreset = clamp(params[`fav_preset${suffix}`] || 1, 1, presetCount);
-    Promise.resolve(onSelectPreset(targetPreset, targetBank)).then(() => {
+    Promise.resolve(selectPresetWithMonitor(targetPreset, targetBank, sw)).then(() => {
       if (Number(params[`fav_mode${suffix}`]) === 1) {
         onSetSwitchMode('live');
         if (Number(params[`fav_layer${suffix}`]) === 1) onSetEditorLayer?.(2);
@@ -10814,9 +11147,11 @@ function DemoControllerModal({
     const { modeId, params } = modeParamsFor(sw);
     if (modeId === 'mute') return;
     if ((modeId === 'fx1' || modeId === 'fx2' || modeId === 'fx3')) {
-      if (configuredFavorite(params, section)) return;
+      if (configuredFavorite(params, section, sw)) return;
       const suffix = section === 1 ? '2' : section === 2 ? '3' : '';
       if (runSpecialCommand(params[`num${suffix}`])) return;
+      appendMidiMonitorEvent(switchMonitorEvent(
+        sw, section, modeId, params, activeLedPixels[sw], spinStates[sw]));
       toggleSection(sw, section);
       return;
     }
@@ -10829,6 +11164,8 @@ function DemoControllerModal({
     if (modeId === 'spin') {
       if (section === 1) {
         if (runSpecialCommand(params.lp_num)) return;
+        appendMidiMonitorEvent(switchMonitorEvent(
+          sw, section, modeId, params, activeLedPixels[sw], spinStates[sw]));
         setLastSections((current) => { const next = [...current]; next[sw] = 1; return next; });
         setActiveLedPixels((current) => {
           const next = current.map((pixels) => [...pixels]);
@@ -10839,6 +11176,8 @@ function DemoControllerModal({
         });
         return;
       }
+      appendMidiMonitorEvent(switchMonitorEvent(
+        sw, section, modeId, params, activeLedPixels[sw], spinStates[sw]));
       setSpinStates((current) => {
         const next = [...current];
         next[sw] = current[sw] < 0 ? 0 : (current[sw] + 1) % 3;
@@ -10855,6 +11194,8 @@ function DemoControllerModal({
         }
         if (handled) return;
       }
+      appendMidiMonitorEvent(switchMonitorEvent(
+        sw, section, modeId, params, activeLedPixels[sw], spinStates[sw]));
       setActiveLedPixels((current) => current.map((pixels, index) =>
         index > 0 && swModes?.[index] === 'single'
           ? (index === sw ? [true, true, true] : [false, false, false])
@@ -10865,20 +11206,30 @@ function DemoControllerModal({
     if (modeId === 'tap_tempo') {
       if (section === 1) {
         if (runSpecialCommand(params.lp_num)) return;
+        appendMidiMonitorEvent(switchMonitorEvent(
+          sw, section, modeId, params, activeLedPixels[sw], spinStates[sw]));
         return;
       }
+      appendMidiMonitorEvent(switchMonitorEvent(
+        sw, section, modeId, params, activeLedPixels[sw], spinStates[sw]));
       registerLiveTap(sw);
       return;
     }
     if (modeId === 'momentary') {
+      appendMidiMonitorEvent(switchMonitorEvent(
+        sw, section, modeId, params, activeLedPixels[sw], spinStates[sw]));
       flashPixels(sw);
       return;
     }
     if (modeId === 'ramp' && Number(params.trigger) === 1) {
+      appendMidiMonitorEvent(switchMonitorEvent(
+        sw, section, modeId, params, activeLedPixels[sw], spinStates[sw]));
       flashPixels(sw, [true, true, true], 240);
       return;
     }
     // STOMP/MACROS/RAMP toggle/loop: o estado permanece ate o proximo toque.
+    appendMidiMonitorEvent(switchMonitorEvent(
+      sw, section, modeId, params, activeLedPixels[sw], spinStates[sw]));
     toggleSection(sw, 0);
   };
 
@@ -10925,7 +11276,7 @@ function DemoControllerModal({
     const params = { ...DEFAULT_SW_PARAMS(modeId), ...(paramsByMode?.[modeId] || {}) };
     if (modeId === 'mute') return;
     if ((modeId === 'fx1' || modeId === 'fx2' || modeId === 'fx3')) {
-      if (configuredFavorite(params, section)) return;
+      if (configuredFavorite(params, section, second ? 8 : 7)) return;
       const suffix = section === 1 ? '2' : section === 2 ? '3' : '';
       if (runSpecialCommand(params[`num${suffix}`])) return;
     } else if (section === 0) {
@@ -10934,6 +11285,11 @@ function DemoControllerModal({
       // interno. Nos demais modos, o comando especial encerra o gesto.
       if (handled && modeId !== 'tap_tempo') return;
     }
+    const monitorSw = second ? 8 : 7;
+    const monitorPixels = second ? global2LedPixels : globalLedPixels;
+    const monitorSpin = second ? global2SpinState : globalSpinState;
+    appendMidiMonitorEvent(switchMonitorEvent(
+      monitorSw, section, modeId, params, monitorPixels, monitorSpin));
     if (modeId === 'spin') {
       if (section === 1) {
         if (runSpecialCommand(params.lp_num)) return;
@@ -10980,7 +11336,7 @@ function DemoControllerModal({
     }
     const targetBank = sw === presetNumber
       ? nextEnabledBank(bankLetterIndex, 1) : bankLetterIndex;
-    onSelectPreset(sw, targetBank);
+    selectPresetWithMonitor(sw, targetBank, sw);
   };
 
   const press = (sw) => {
@@ -11042,7 +11398,7 @@ function DemoControllerModal({
         return;
       }
       if (bankPreview) {
-        onSelectPreset(bankPreview.preset, bankPreview.bank);
+        selectPresetWithMonitor(bankPreview.preset, bankPreview.bank, sw);
         setBankPreview(null);
       } else if (Number(bankChangeMode) === 3 || sw === presetNumber) {
         setBankPreview({ bank: bankLetterIndex, preset: sw });
@@ -11227,9 +11583,9 @@ function DemoControllerModal({
                     onClick={() => onSetSwitchMode('live')}>LIVE</button>
           </div>
           <div className="bf-demo-bank-controls">
-            <button type="button" onClick={onPreviousBank} aria-label="Banco anterior">‹</button>
+            <button type="button" onClick={() => navigateBankWithMonitor(-1)} aria-label="Banco anterior">‹</button>
             <span>BANCO {letter}</span>
-            <button type="button" onClick={onNextBank} aria-label="Próximo banco">›</button>
+            <button type="button" onClick={() => navigateBankWithMonitor(1)} aria-label="Próximo banco">›</button>
           </div>
         </div>
 
@@ -11420,6 +11776,13 @@ function DemoControllerModal({
           </div>
           </>)}
         </div>
+
+        <DemoMidiMonitorCard
+          events={midiMonitorEvents}
+          mode={midiMonitorMode}
+          onSetMode={setMidiMonitorMode}
+          onClear={() => setMidiMonitorEvents([])}
+        />
 
         <div className="bf-demo-modal-foot">
           <p>Toque no preset ativo para avançar o banco. Segure para LONG PRESS e toque duas vezes para RECLICK. Em LIVE, os modos e os 3 pixels seguem a configuração salva.</p>
