@@ -10239,6 +10239,8 @@ function DemoControllerModal({
   const [globalSpinState, setGlobalSpinState] = useState(-1);
   const [global2LedPixels, setGlobal2LedPixels] = useState([false, false, false]);
   const [global2SpinState, setGlobal2SpinState] = useState(-1);
+  const [globalTapRuntime, setGlobalTapRuntime] = useState({ lastTapMs: 0, intervalMs: 0, phase: 0 });
+  const [global2TapRuntime, setGlobal2TapRuntime] = useState({ lastTapMs: 0, intervalMs: 0, phase: 0 });
   const [bankPreview, setBankPreview] = useState(null);
   const [pressedSwitch, setPressedSwitch] = useState(0);
   const longPressTimerRef = useRef(null);
@@ -10469,13 +10471,71 @@ function DemoControllerModal({
   useEffect(() => {
     const resetGlobal = (modeId, paramsByMode, setPixels, setSpin) => {
       const params = { ...DEFAULT_SW_PARAMS(modeId), ...(paramsByMode?.[modeId] || {}) };
-      if (Number(params.reset_on_preset) !== 1) return;
+      if (modeId !== 'single' || Number(params.reset_on_preset) !== 1) return;
       setPixels([false, false, false]);
       setSpin(-1);
     };
     resetGlobal(globalSwMode, globalSwParams, setGlobalLedPixels, setGlobalSpinState);
     resetGlobal(global2SwMode, global2SwParams, setGlobal2LedPixels, setGlobal2SpinState);
   }, [selectedTag]);
+
+  // O firmware reinicia o runtime do GLOBAL quando seu modo muda. Em TAP,
+  // o estado ocioso ja nasce no pixel fisico 1 e continua ciclando 1/2/3.
+  useEffect(() => {
+    setGlobalTapRuntime({ lastTapMs: 0, intervalMs: 0, phase: 0 });
+    setGlobalLedPixels(globalSwMode === 'tap_tempo'
+      ? spinArcsForState(0) : [false, false, false]);
+  }, [globalSwMode]);
+
+  useEffect(() => {
+    setGlobal2TapRuntime({ lastTapMs: 0, intervalMs: 0, phase: 0 });
+    setGlobal2LedPixels(global2SwMode === 'tap_tempo'
+      ? spinArcsForState(0) : [false, false, false]);
+  }, [global2SwMode]);
+
+  const tapLedOnMs = (intervalMs) => Math.max(60, Math.floor(intervalMs * 2 / 3));
+
+  // TAP GLOBAL 1: sem BPM, um pixel por vez a cada 300ms; com BPM medido,
+  // os tres pixels alternam ON/OFF uma vez por batida (ON = ~2/3 do tempo).
+  useEffect(() => {
+    if (!open || globalSwMode !== 'tap_tempo') return undefined;
+    const { intervalMs, phase } = globalTapRuntime;
+    setGlobalLedPixels(intervalMs > 0
+      ? (phase === 1 ? [true, true, true] : [false, false, false])
+      : spinArcsForState(phase));
+    const onMs = tapLedOnMs(intervalMs);
+    const delay = intervalMs > 0
+      ? (phase === 1 ? onMs : Math.max(60, intervalMs - onMs))
+      : 300;
+    const timer = window.setTimeout(() => {
+      setGlobalTapRuntime((current) => ({
+        ...current,
+        phase: current.intervalMs > 0 ? ((current.phase + 1) & 1) : ((current.phase + 1) % 3),
+      }));
+    }, delay);
+    return () => window.clearTimeout(timer);
+  }, [open, globalSwMode, globalTapRuntime.intervalMs, globalTapRuntime.phase]);
+
+  // GLOBAL 2 usa exatamente o mesmo motor quando o botao LIVE foi roteado
+  // para a segunda funcao global.
+  useEffect(() => {
+    if (!open || global2SwMode !== 'tap_tempo') return undefined;
+    const { intervalMs, phase } = global2TapRuntime;
+    setGlobal2LedPixels(intervalMs > 0
+      ? (phase === 1 ? [true, true, true] : [false, false, false])
+      : spinArcsForState(phase));
+    const onMs = tapLedOnMs(intervalMs);
+    const delay = intervalMs > 0
+      ? (phase === 1 ? onMs : Math.max(60, intervalMs - onMs))
+      : 300;
+    const timer = window.setTimeout(() => {
+      setGlobal2TapRuntime((current) => ({
+        ...current,
+        phase: current.intervalMs > 0 ? ((current.phase + 1) & 1) : ((current.phase + 1) % 3),
+      }));
+    }, delay);
+    return () => window.clearTimeout(timer);
+  }, [open, global2SwMode, global2TapRuntime.intervalMs, global2TapRuntime.phase]);
 
   if (!open) return null;
 
@@ -10582,6 +10642,23 @@ function DemoControllerModal({
     toggleSection(sw, 0);
   };
 
+  const registerGlobalTap = (second = false) => {
+    const now = performance.now();
+    const setRuntime = second ? setGlobal2TapRuntime : setGlobalTapRuntime;
+    setRuntime((current) => {
+      const elapsed = current.lastTapMs > 0 ? now - current.lastTapMs : 0;
+      if (elapsed > 0 && elapsed <= 2500) {
+        return {
+          lastTapMs: now,
+          intervalMs: clamp(Math.round(elapsed), 100, 3000),
+          phase: 1,
+        };
+      }
+      // Primeiro toque (ou toque depois de 2,5s): volta ao ciclo ocioso.
+      return { lastTapMs: now, intervalMs: 0, phase: current.phase % 3 };
+    });
+  };
+
   const pressGlobalSwitch = (section = 0, second = false) => {
     const modeId = (second ? global2SwMode : globalSwMode) || 'fx1';
     const paramsByMode = second ? global2SwParams : globalSwParams;
@@ -10593,7 +10670,12 @@ function DemoControllerModal({
       if (configuredFavorite(params, section)) return;
       const suffix = section === 1 ? '2' : section === 2 ? '3' : '';
       if (runSpecialCommand(params[`num${suffix}`])) return;
-    } else if (section === 0 && runConfiguredSpecial(modeId, params)) return;
+    } else if (section === 0) {
+      const handled = runConfiguredSpecial(modeId, params);
+      // TAP sempre registra a batida mesmo quando um slot executa um comando
+      // interno. Nos demais modos, o comando especial encerra o gesto.
+      if (handled && modeId !== 'tap_tempo') return;
+    }
     if (modeId === 'spin') {
       if (section === 1) {
         if (runSpecialCommand(params.lp_num)) return;
@@ -10606,10 +10688,16 @@ function DemoControllerModal({
       setPixels([true, true, true]);
       return;
     }
-    if (modeId === 'momentary' || modeId === 'single' || modeId === 'tap_tempo' ||
+    if (modeId === 'tap_tempo') {
+      if (section === 1) {
+        if (runSpecialCommand(params.lp_num)) return;
+        return;
+      }
+      registerGlobalTap(second);
+      return;
+    }
+    if (modeId === 'momentary' || modeId === 'single' ||
         (modeId === 'ramp' && Number(params.trigger) === 1)) {
-      if ((modeId === 'tap_tempo' || modeId === 'spin') && section === 1 &&
-          runSpecialCommand(params.lp_num)) return;
       setPixels([true, true, true]);
       window.setTimeout(() => setPixels([false, false, false]), 180);
       return;
