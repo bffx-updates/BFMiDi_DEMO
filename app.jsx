@@ -11170,10 +11170,10 @@ function DemoControllerModal({
     const y2 = cy + radius * Math.sin(end);
     return `M ${x1} ${y1} A ${radius} ${radius} 0 0 1 ${x2} ${y2}`;
   };
-  const metalHexPoints = (cx, cy, radius) => Array.from({ length: 6 }, (_, index) => {
-    const angle = (-90 + index * 60) * Math.PI / 180;
-    return `${cx + radius * Math.cos(angle)},${cy + radius * Math.sin(angle)}`;
-  }).join(' ');
+  const switchRadialPoint = (cx, cy, radius, angle) => {
+    const rad = angle * Math.PI / 180;
+    return { x: cx + radius * Math.cos(rad), y: cy + radius * Math.sin(rad) };
+  };
 
   // Coordenadas originais do viewBox 8853.8 x 6898.93 do 7SW.svg.
   // Na 7SW+, o controle 8 corresponde ao footswitch LIVE/MODE e o controle 7
@@ -11252,26 +11252,28 @@ function DemoControllerModal({
                    preserveAspectRatio="xMidYMid meet"
                    aria-label={`Controles interativos da ${modelName}`}>
                 <defs>
-                  <radialGradient id={`demo-switch-base-${artworkInfo.id}`} cx="36%" cy="25%" r="74%">
-                    <stop offset="0" stopColor="#fff" />
-                    <stop offset=".32" stopColor="#dce1e3" />
-                    <stop offset=".67" stopColor="#7f878b" />
-                    <stop offset=".84" stopColor="#e9edef" />
-                    <stop offset="1" stopColor="#4b5154" />
+                  <radialGradient id={`demo-switch-base-${artworkInfo.id}`} cx="35%" cy="24%" r="78%">
+                    <stop offset="0" stopColor="#ffffff" />
+                    <stop offset=".18" stopColor="#e9edef" />
+                    <stop offset=".42" stopColor="#899297" />
+                    <stop offset=".62" stopColor="#f8fafb" />
+                    <stop offset=".78" stopColor="#747d82" />
+                    <stop offset=".92" stopColor="#dce1e3" />
+                    <stop offset="1" stopColor="#363c40" />
                   </radialGradient>
                   <linearGradient id={`demo-switch-nut-${artworkInfo.id}`} x1="8%" y1="5%" x2="92%" y2="95%">
-                    <stop offset="0" stopColor="#f8fbfc" />
-                    <stop offset=".22" stopColor="#9ca4a8" />
-                    <stop offset=".48" stopColor="#edf1f2" />
-                    <stop offset=".72" stopColor="#737b7f" />
-                    <stop offset="1" stopColor="#cbd0d2" />
+                    <stop offset="0" stopColor="#ffffff" />
+                    <stop offset=".2" stopColor="#747c81" />
+                    <stop offset=".43" stopColor="#f7f9fa" />
+                    <stop offset=".66" stopColor="#555d62" />
+                    <stop offset=".84" stopColor="#eef1f2" />
+                    <stop offset="1" stopColor="#8b9499" />
                   </linearGradient>
-                  <radialGradient id={`demo-switch-cap-${artworkInfo.id}`} cx="34%" cy="24%" r="76%">
-                    <stop offset="0" stopColor="#fbf8ef" />
-                    <stop offset=".3" stopColor="#c3c1ba" />
-                    <stop offset=".6" stopColor="#686d6c" />
-                    <stop offset=".82" stopColor="#d8d5cd" />
-                    <stop offset="1" stopColor="#454a49" />
+                  <radialGradient id={`demo-switch-cap-${artworkInfo.id}`} cx="38%" cy="28%" r="72%">
+                    <stop offset="0" stopColor="#4c5052" />
+                    <stop offset=".38" stopColor="#282b2d" />
+                    <stop offset=".76" stopColor="#17191b" />
+                    <stop offset="1" stopColor="#090a0b" />
                   </radialGradient>
                 </defs>
                 {artworkInfo.controls.map(({ sw, cx, cy, label }) => {
@@ -11304,22 +11306,8 @@ function DemoControllerModal({
                            handleSwitchClick(actionSw);
                          }
                        }}>
-                      {artworkInfo.id !== '7sw' && (
-                        <g className="bf-demo-switch-metal" pointerEvents="none">
-                          <circle cx={cx} cy={cy} r={artworkInfo.controlRadius * .56}
-                            fill={`url(#demo-switch-base-${artworkInfo.id})`}
-                            stroke="#25292b" strokeWidth={artworkInfo.controlRadius * .045} />
-                          <polygon points={metalHexPoints(cx, cy, artworkInfo.controlRadius * .42)}
-                            fill={`url(#demo-switch-nut-${artworkInfo.id})`}
-                            stroke="#454b4e" strokeWidth={artworkInfo.controlRadius * .035} />
-                          <circle cx={cx} cy={cy} r={artworkInfo.controlRadius * .29}
-                            fill={`url(#demo-switch-cap-${artworkInfo.id})`}
-                            stroke="#3e4446" strokeWidth={artworkInfo.controlRadius * .025} />
-                          <circle cx={cx - artworkInfo.controlRadius * .08}
-                            cy={cy - artworkInfo.controlRadius * .09}
-                            r={artworkInfo.controlRadius * .075} fill="rgba(255,255,255,.32)" />
-                        </g>
-                      )}
+                      <circle cx={cx} cy={cy} r={artworkInfo.controlRadius * .985}
+                        className="bf-demo-switch-glass-ring" pointerEvents="none" />
                       <circle cx={cx} cy={cy} r={artworkInfo.controlRadius}
                         className={'bf-demo-seven-switch-control' + (isActive ? ' is-active' : '') +
                           (pressedSwitch === actionSw ? ' is-pressed' : '') + (disabled ? ' is-disabled' : '')}
@@ -11341,8 +11329,51 @@ function DemoControllerModal({
                           <path d={ringSegmentPath(cx, cy, angle, artworkInfo.ringRadius)}
                             className={'bf-demo-led-segment-fill' + (litArcs[arc] ? ' is-on' : '')}
                             style={{ '--segment-color': arcColors[arc], strokeWidth: artworkInfo.ringFill }} />
+                          <path d={ringSegmentPath(cx, cy, angle, artworkInfo.ringRadius, 48)}
+                            className="bf-demo-led-segment-sheen"
+                            style={{ strokeWidth: Math.max(2, artworkInfo.ringFill * .075) }} />
                         </g>
                       ))}
+                      <g className={'bf-demo-switch-metal' +
+                          (pressedSwitch === actionSw ? ' is-pressed' : '')}
+                         pointerEvents="none">
+                        <circle cx={cx} cy={cy} r={artworkInfo.controlRadius * .65}
+                          className="bf-demo-switch-metal-shadow" />
+                        <circle cx={cx} cy={cy} r={artworkInfo.controlRadius * .615}
+                          fill={`url(#demo-switch-base-${artworkInfo.id})`}
+                          className="bf-demo-switch-metal-plate"
+                          strokeWidth={artworkInfo.controlRadius * .025} />
+                        <circle cx={cx} cy={cy} r={artworkInfo.controlRadius * .445}
+                          fill="#202427" stroke="#545c61"
+                          strokeWidth={artworkInfo.controlRadius * .025} />
+                        {[30, 150, 270].map((angle) => {
+                          const inner = switchRadialPoint(cx, cy, artworkInfo.controlRadius * .43, angle);
+                          const outer = switchRadialPoint(cx, cy, artworkInfo.controlRadius * .63, angle);
+                          return (
+                            <g key={angle}>
+                              <line x1={inner.x} y1={inner.y} x2={outer.x} y2={outer.y}
+                                className="bf-demo-switch-metal-divider"
+                                strokeWidth={artworkInfo.controlRadius * .085} />
+                              <line x1={inner.x} y1={inner.y} x2={outer.x} y2={outer.y}
+                                className="bf-demo-switch-metal-divider-highlight"
+                                strokeWidth={artworkInfo.controlRadius * .02} />
+                            </g>
+                          );
+                        })}
+                        <circle cx={cx} cy={cy} r={artworkInfo.controlRadius * .42}
+                          fill="none" stroke={`url(#demo-switch-nut-${artworkInfo.id})`}
+                          strokeWidth={artworkInfo.controlRadius * .055} />
+                        <circle cx={cx} cy={cy} r={artworkInfo.controlRadius * .345}
+                          fill={`url(#demo-switch-nut-${artworkInfo.id})`}
+                          stroke="#f5f7f8" strokeWidth={artworkInfo.controlRadius * .018} />
+                        <circle cx={cx} cy={cy} r={artworkInfo.controlRadius * .292}
+                          fill={`url(#demo-switch-cap-${artworkInfo.id})`}
+                          className="bf-demo-switch-dark-cap"
+                          strokeWidth={artworkInfo.controlRadius * .018} />
+                        <path d={ringSegmentPath(cx, cy, 225, artworkInfo.controlRadius * .31, 58)}
+                          className="bf-demo-switch-cap-highlight"
+                          strokeWidth={artworkInfo.controlRadius * .018} />
+                      </g>
                     </g>
                   );
                 })}

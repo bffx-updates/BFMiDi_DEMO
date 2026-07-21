@@ -6123,9 +6123,17 @@ button.bf-select-btn {
 .bf-demo-seven-switch-control.is-pressed {
   stroke-width: 58;
 }
+.bf-demo-switch-glass-ring {
+  fill: rgba(10,15,20,.62);
+  stroke: rgba(202,216,225,.72);
+  stroke-width: 1.5px;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 5px 5px rgba(0,0,0,.5));
+}
 .bf-demo-led-segment { cursor: pointer; }
 .bf-demo-led-segment-outline,
-.bf-demo-led-segment-fill {
+.bf-demo-led-segment-fill,
+.bf-demo-led-segment-sheen {
   fill: none;
   stroke-linecap: butt;
   transition: stroke .15s ease, filter .15s ease, opacity .15s ease;
@@ -6137,10 +6145,10 @@ button.bf-select-btn {
 }
 .bf-demo-led-segment-fill {
   pointer-events: stroke;
-  stroke: #e4e8ea;
+  stroke: #78848c;
   stroke-width: 154;
-  opacity: .9;
-  filter: drop-shadow(0 8px 7px rgba(0,0,0,.24));
+  opacity: .62;
+  filter: drop-shadow(0 5px 5px rgba(0,0,0,.38));
 }
 .bf-demo-led-segment-fill.is-on {
   stroke: var(--segment-color);
@@ -6148,6 +6156,38 @@ button.bf-select-btn {
   filter:
     brightness(var(--demo-brightness))
     drop-shadow(0 0 18px color-mix(in srgb, var(--segment-color) 82%, transparent));
+}
+.bf-demo-led-segment-sheen {
+  pointer-events: none;
+  stroke: rgba(236,248,255,.58);
+  opacity: .66;
+  filter: drop-shadow(0 0 3px rgba(190,230,255,.32));
+}
+.bf-demo-switch-metal {
+  transform-box: fill-box;
+  transform-origin: center;
+  filter: drop-shadow(0 7px 5px rgba(0,0,0,.5));
+  transition: transform .1s ease, filter .1s ease;
+}
+.bf-demo-switch-metal.is-pressed {
+  transform: translateY(2px) scale(.985);
+  filter: drop-shadow(0 2px 2px rgba(0,0,0,.55));
+}
+.bf-demo-switch-metal-shadow { fill: #0b0e10; opacity: .92; }
+.bf-demo-switch-metal-plate { stroke: #f2f5f6; }
+.bf-demo-switch-metal-divider {
+  stroke: #3a4145;
+  stroke-linecap: butt;
+}
+.bf-demo-switch-metal-divider-highlight {
+  stroke: rgba(255,255,255,.48);
+  stroke-linecap: butt;
+}
+.bf-demo-switch-dark-cap { stroke: #080a0b; }
+.bf-demo-switch-cap-highlight {
+  fill: none;
+  stroke: rgba(255,255,255,.5);
+  stroke-linecap: round;
 }
 .bf-demo-seven-switch-controls g[aria-disabled="true"] { cursor: default; }
 .bf-demo-seven-switch-control.is-disabled { opacity: .25; }
