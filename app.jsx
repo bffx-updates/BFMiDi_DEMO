@@ -10247,6 +10247,7 @@ function DemoControllerModal({
   layer2LedColor,
   livePinGlobal2, global2SwMode, global2SwParams, global2SwDisplay,
   bpmCardSecs, bpmCardAvg,
+  nanoSw6Global,
 }) {
   const emptyLedPixels = () => Array.from({ length: 9 }, () => [false, false, false]);
   const [activeLedPixels, setActiveLedPixels] = useState(emptyLedPixels);
@@ -10273,10 +10274,59 @@ function DemoControllerModal({
   const modelInfo = MODELS.find((item) => item.id === model) || MODELS[0];
   const switchCount = Math.max(4, Math.min(8, Number(modelInfo?.switches) || 6));
   const displayWide = String(model).startsWith('BFMIDI-3');
-  // O firmware historicamente salva esta mesma carcaca como "7S" em algumas
-  // configuracoes e como "7SW+" em outras. As duas devem abrir o desenho real
-  // de oito controles (6 numerados + LIVE/MODE + SW1/2/EXP).
-  const hasSevenSwitchArtwork = /^BFMIDI-3 7(?:S|SW\+?)$/i.test(String(model).trim());
+  const modelName = String(model).trim();
+  // Cada familia compartilha a mesma furacao fisica. As coordenadas abaixo
+  // vieram diretamente dos viewBoxes fornecidos (centro real dos recortes).
+  const artworkInfo = /^BFMIDI-3 7(?:S|SW\+?)$/i.test(modelName) ? {
+    id: '7sw', file: '7SW.svg', viewW: 8853.8, viewH: 6898.93,
+    display: { x: 2563.4, y: 410.5, w: 3741.1, h: 2493.9 },
+    controlRadius: 515.9, ringRadius: 432, ringOutline: 190, ringFill: 154,
+    controls: [
+      { sw: 8, cx: 1164.92, cy: 1119.37, label: 'LIVE / MODE' },
+      { sw: 7, cx: 7701.56, cy: 1119.37, label: 'SW GLOBAL · SW1/2 e EXP' },
+      { sw: 4, cx: 1164.92, cy: 3483.35, label: 'Footswitch 4' },
+      { sw: 5, cx: 4433.24, cy: 3496.91, label: 'Footswitch 5' },
+      { sw: 6, cx: 7701.56, cy: 3496.91, label: 'Footswitch 6' },
+      { sw: 1, cx: 1164.92, cy: 5890.22, label: 'Footswitch 1' },
+      { sw: 2, cx: 4433.24, cy: 5890.22, label: 'Footswitch 2' },
+      { sw: 3, cx: 7701.56, cy: 5890.22, label: 'Footswitch 3' },
+    ],
+  } : /NANO/i.test(modelName) ? {
+    id: 'nano', file: 'NANO.svg', viewW: 89974.67, viewH: 55129.26,
+    display: { x: 25645, y: 14420, w: 38330, h: 26180 },
+    controlRadius: 5037.09, ringRadius: 4165, ringOutline: 1850, ringFill: 1500,
+    controls: [
+      { sw: 4, cx: 9999.87, cy: 7013.34, label: 'Footswitch 4' },
+      { sw: 5, cx: 44800.45, cy: 7013.34, label: 'Footswitch 5' },
+      { sw: 6, cx: 79501.16, cy: 7013.34, label: 'Footswitch 6' },
+      { sw: 1, cx: 9958.93, cy: 46613.58, label: 'Footswitch 1' },
+      { sw: 2, cx: 44748.82, cy: 46613.58, label: 'Footswitch 2' },
+      { sw: 3, cx: 79501.16, cy: 46613.58, label: 'Footswitch 3' },
+    ],
+  } : /MICRO/i.test(modelName) ? {
+    id: 'micro', file: 'MICRO.svg', viewW: 13533.28, viewH: 9692.56,
+    display: { x: 4525, y: 3160, w: 4480, h: 3390 },
+    controlRadius: 973.8, ringRadius: 805, ringOutline: 358, ringFill: 290,
+    controls: [
+      { sw: 3, cx: 1663.47, cy: 1349.05, label: 'Footswitch 3' },
+      { sw: 4, cx: 11861.45, cy: 1349.05, label: 'Footswitch 4' },
+      { sw: 1, cx: 1663.47, cy: 8086.67, label: 'Footswitch 1' },
+      { sw: 2, cx: 11861.45, cy: 8086.67, label: 'Footswitch 2' },
+    ],
+  } : /(?: 6S| 6SW\+)$/i.test(modelName) ? {
+    id: '6sw', file: '6SW.svg', viewW: 15381.74, viewH: 5339.98,
+    display: { x: 680, y: 1095, w: 4560, h: 3055 },
+    controlRadius: 421.7, ringRadius: 349, ringOutline: 155, ringFill: 126,
+    controls: [
+      { sw: 4, cx: 6499.5, cy: 1018.74, label: 'Footswitch 4' },
+      { sw: 5, cx: 10425.74, cy: 1018.74, label: 'Footswitch 5' },
+      { sw: 6, cx: 14367, cy: 1018.74, label: 'Footswitch 6' },
+      { sw: 1, cx: 6499.5, cy: 3880.12, label: 'Footswitch 1' },
+      { sw: 2, cx: 10425.74, cy: 3880.12, label: 'Footswitch 2' },
+      { sw: 3, cx: 14367, cy: 3880.12, label: 'Footswitch 3' },
+    ],
+  } : null;
+  const hasControllerArtwork = !!artworkInfo;
   const selectedTag = `${String.fromCharCode(65 + (bankLetterIndex || 0))}${presetNumber || 1}`;
   const visualBankIndex = bankPreview?.bank ?? bankLetterIndex ?? 0;
   const visualPresetNumber = bankPreview?.preset ?? presetNumber ?? 1;
@@ -11046,9 +11096,7 @@ function DemoControllerModal({
     });
   };
 
-  const ringSegmentPath = (cx, cy, angle) => {
-    const radius = 432;
-    const halfSpan = 54;
+  const ringSegmentPath = (cx, cy, angle, radius = 432, halfSpan = 54) => {
     const start = (angle - halfSpan) * Math.PI / 180;
     const end = (angle + halfSpan) * Math.PI / 180;
     const x1 = cx + radius * Math.cos(start);
@@ -11057,6 +11105,10 @@ function DemoControllerModal({
     const y2 = cy + radius * Math.sin(end);
     return `M ${x1} ${y1} A ${radius} ${radius} 0 0 1 ${x2} ${y2}`;
   };
+  const metalHexPoints = (cx, cy, radius) => Array.from({ length: 6 }, (_, index) => {
+    const angle = (-90 + index * 60) * Math.PI / 180;
+    return `${cx + radius * Math.cos(angle)},${cy + radius * Math.sin(angle)}`;
+  }).join(' ');
 
   // Coordenadas originais do viewBox 8853.8 x 6898.93 do 7SW.svg.
   // Na 7SW+, o controle 8 corresponde ao footswitch LIVE/MODE e o controle 7
@@ -11116,47 +11168,97 @@ function DemoControllerModal({
           </div>
         </div>
 
-        <div className={`bf-demo-controller is-${switchCount}sw${displayWide ? ' is-wide-display' : ''}${hasSevenSwitchArtwork ? ' is-seven-switch-artwork' : ''}`}
+        <div className={`bf-demo-controller is-${switchCount}sw${displayWide ? ' is-wide-display' : ''}${hasControllerArtwork ? ' is-seven-switch-artwork' : ''}`}
              style={{ '--demo-brightness': Math.max(0.25, Number(brightness || 72) / 100) }}>
-          {hasSevenSwitchArtwork ? (
-            <div className="bf-demo-seven-switch-stage">
-              <img className="bf-demo-seven-switch-art" src="icons/controllers/7SW.svg"
-                   alt="Desenho da controladora BFMIDI-3 com oito controles" draggable="false" />
-              <div className="bf-demo-seven-switch-display">{virtualDisplay}</div>
-              <svg className="bf-demo-seven-switch-controls" viewBox="0 0 8853.8 6898.93"
-                   preserveAspectRatio="xMidYMid meet" aria-label="Controles interativos da 7SW+">
-                {sevenSwitchControls.map(({ sw, cx, cy, label }) => {
-                  const disabled = sw <= 6 && sw > presetCount;
-                  const litArcs = sw === 8
+          {hasControllerArtwork ? (
+            <div className={`bf-demo-seven-switch-stage is-${artworkInfo.id}`}
+                 style={{ aspectRatio: `${artworkInfo.viewW} / ${artworkInfo.viewH}` }}>
+              <img className="bf-demo-seven-switch-art"
+                   src={`icons/controllers/${artworkInfo.file}`}
+                   alt={`Desenho da controladora ${modelName}`} draggable="false" />
+              <div className="bf-demo-seven-switch-display" style={{
+                left: `${artworkInfo.display.x / artworkInfo.viewW * 100}%`,
+                top: `${artworkInfo.display.y / artworkInfo.viewH * 100}%`,
+                width: `${artworkInfo.display.w / artworkInfo.viewW * 100}%`,
+                height: `${artworkInfo.display.h / artworkInfo.viewH * 100}%`,
+              }}>{virtualDisplay}</div>
+              <svg className="bf-demo-seven-switch-controls"
+                   viewBox={`0 0 ${artworkInfo.viewW} ${artworkInfo.viewH}`}
+                   preserveAspectRatio="xMidYMid meet"
+                   aria-label={`Controles interativos da ${modelName}`}>
+                <defs>
+                  <radialGradient id={`demo-switch-base-${artworkInfo.id}`} cx="36%" cy="25%" r="74%">
+                    <stop offset="0" stopColor="#fff" />
+                    <stop offset=".32" stopColor="#dce1e3" />
+                    <stop offset=".67" stopColor="#7f878b" />
+                    <stop offset=".84" stopColor="#e9edef" />
+                    <stop offset="1" stopColor="#4b5154" />
+                  </radialGradient>
+                  <linearGradient id={`demo-switch-nut-${artworkInfo.id}`} x1="8%" y1="5%" x2="92%" y2="95%">
+                    <stop offset="0" stopColor="#f8fbfc" />
+                    <stop offset=".22" stopColor="#9ca4a8" />
+                    <stop offset=".48" stopColor="#edf1f2" />
+                    <stop offset=".72" stopColor="#737b7f" />
+                    <stop offset="1" stopColor="#cbd0d2" />
+                  </linearGradient>
+                  <radialGradient id={`demo-switch-cap-${artworkInfo.id}`} cx="34%" cy="24%" r="76%">
+                    <stop offset="0" stopColor="#fbf8ef" />
+                    <stop offset=".3" stopColor="#c3c1ba" />
+                    <stop offset=".6" stopColor="#686d6c" />
+                    <stop offset=".82" stopColor="#d8d5cd" />
+                    <stop offset="1" stopColor="#454a49" />
+                  </radialGradient>
+                </defs>
+                {artworkInfo.controls.map(({ sw, cx, cy, label }) => {
+                  const actionSw = artworkInfo.id === 'nano' && sw === 6 && nanoSw6Global ? 7 : sw;
+                  const disabled = actionSw <= 6 && actionSw > presetCount;
+                  const litArcs = actionSw === 8
                     ? (livePinGlobal2 ? global2LedPixels
                       : [switchMode === 'live', switchMode === 'live', switchMode === 'live'])
-                    : sw === 7
+                    : actionSw === 7
                       ? globalLedPixels
-                      : switchMode === 'preset' && !isHybridLiveSwitch(sw)
-                        ? [sw === visualPresetNumber, sw === visualPresetNumber, sw === visualPresetNumber]
-                        : swModes?.[sw] === 'spin'
-                          ? spinArcsForState(spinStates[sw]).map((value, arc) =>
-                              value || !!activeLedPixels[sw]?.[arc])
-                          : activeLedPixels[sw] || [false, false, false];
-                  const arcColors = ledArcColorsFor(sw);
+                      : switchMode === 'preset' && !isHybridLiveSwitch(actionSw)
+                        ? [actionSw === visualPresetNumber, actionSw === visualPresetNumber, actionSw === visualPresetNumber]
+                        : swModes?.[actionSw] === 'spin'
+                          ? spinArcsForState(spinStates[actionSw]).map((value, arc) =>
+                              value || !!activeLedPixels[actionSw]?.[arc])
+                          : activeLedPixels[actionSw] || [false, false, false];
+                  const arcColors = ledArcColorsFor(actionSw);
                   const isActive = litArcs.some(Boolean);
                   return (
                     <g key={sw} role="button" tabIndex={disabled ? -1 : 0}
-                       aria-label={label} aria-disabled={disabled ? 'true' : 'false'}
-                       onPointerDown={() => !disabled && handleSwitchPointerDown(sw)}
+                       aria-label={actionSw === 7 ? 'SW GLOBAL' : label}
+                       aria-disabled={disabled ? 'true' : 'false'}
+                       onPointerDown={() => !disabled && handleSwitchPointerDown(actionSw)}
                        onPointerUp={handleSwitchPointerUp}
                        onPointerCancel={handleSwitchPointerUp}
-                       onClick={() => !disabled && handleSwitchClick(sw)}
+                       onClick={() => !disabled && handleSwitchClick(actionSw)}
                        onKeyDown={(event) => {
                          if (!disabled && (event.key === 'Enter' || event.key === ' ')) {
                            event.preventDefault();
-                           handleSwitchClick(sw);
+                           handleSwitchClick(actionSw);
                          }
                        }}>
-                      <circle cx={cx} cy={cy} r="515.9"
+                      {artworkInfo.id !== '7sw' && (
+                        <g className="bf-demo-switch-metal" pointerEvents="none">
+                          <circle cx={cx} cy={cy} r={artworkInfo.controlRadius * .56}
+                            fill={`url(#demo-switch-base-${artworkInfo.id})`}
+                            stroke="#25292b" strokeWidth={artworkInfo.controlRadius * .045} />
+                          <polygon points={metalHexPoints(cx, cy, artworkInfo.controlRadius * .42)}
+                            fill={`url(#demo-switch-nut-${artworkInfo.id})`}
+                            stroke="#454b4e" strokeWidth={artworkInfo.controlRadius * .035} />
+                          <circle cx={cx} cy={cy} r={artworkInfo.controlRadius * .29}
+                            fill={`url(#demo-switch-cap-${artworkInfo.id})`}
+                            stroke="#3e4446" strokeWidth={artworkInfo.controlRadius * .025} />
+                          <circle cx={cx - artworkInfo.controlRadius * .08}
+                            cy={cy - artworkInfo.controlRadius * .09}
+                            r={artworkInfo.controlRadius * .075} fill="rgba(255,255,255,.32)" />
+                        </g>
+                      )}
+                      <circle cx={cx} cy={cy} r={artworkInfo.controlRadius}
                         className={'bf-demo-seven-switch-control' + (isActive ? ' is-active' : '') +
-                          (pressedSwitch === sw ? ' is-pressed' : '') + (disabled ? ' is-disabled' : '')}
-                        style={{ '--led-color': ledFor(sw) }} />
+                          (pressedSwitch === actionSw ? ' is-pressed' : '') + (disabled ? ' is-disabled' : '')}
+                        style={{ '--led-color': ledFor(actionSw) }} />
                       {[90, 210, 330].map((angle, arc) => (
                         <g key={arc} className="bf-demo-led-segment"
                            onPointerDown={(event) => event.stopPropagation()}
@@ -11164,14 +11266,16 @@ function DemoControllerModal({
                            onClick={(event) => {
                              event.stopPropagation();
                              if (!disabled) {
-                               if ((switchMode === 'live' || isHybridLiveSwitch(sw)) && sw <= 6) toggleLedArc(sw, arc);
-                               else handleSwitchClick(sw);
+                               if ((switchMode === 'live' || isHybridLiveSwitch(actionSw)) && actionSw <= 6) toggleLedArc(actionSw, arc);
+                               else handleSwitchClick(actionSw);
                              }
                            }}>
-                          <path d={ringSegmentPath(cx, cy, angle)} className="bf-demo-led-segment-outline" />
-                          <path d={ringSegmentPath(cx, cy, angle)}
+                          <path d={ringSegmentPath(cx, cy, angle, artworkInfo.ringRadius)}
+                            className="bf-demo-led-segment-outline"
+                            style={{ strokeWidth: artworkInfo.ringOutline }} />
+                          <path d={ringSegmentPath(cx, cy, angle, artworkInfo.ringRadius)}
                             className={'bf-demo-led-segment-fill' + (litArcs[arc] ? ' is-on' : '')}
-                            style={{ '--segment-color': arcColors[arc] }} />
+                            style={{ '--segment-color': arcColors[arc], strokeWidth: artworkInfo.ringFill }} />
                         </g>
                       ))}
                     </g>
@@ -18128,6 +18232,7 @@ function App() {
         global2SwDisplay={global2SwDisplay}
         bpmCardSecs={bpmCardSecs}
         bpmCardAvg={bpmCardAvg}
+        nanoSw6Global={nanoSw6Global}
       />
       {wifiResult && (
         <div className="bf-modal-backdrop" onClick={() => setWifiResult(null)}>
