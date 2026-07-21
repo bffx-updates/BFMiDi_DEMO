@@ -6399,7 +6399,7 @@ button.bf-select-btn {
 /* A placa 7SW e mais alta que os outros layouts. Mantem a arte centralizada
    com uma pequena reducao sem alterar coordenadas do display e footswitches. */
 .bf-demo-controller.is-7sw-artwork {
-  width: 88%;
+  width: 75%;
   margin-inline: auto;
 }
 .bf-studio-np-esw-master {
