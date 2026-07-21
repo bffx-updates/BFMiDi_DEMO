@@ -21,6 +21,15 @@ viewBox="0 0 8853.8 6898.93"
    <stop offset="0.82" stop-color="#858783"/>
    <stop offset="1" stop-color="#434746"/>
   </linearGradient>
+  <linearGradient id="nutMetal" x1="8%" y1="5%" x2="92%" y2="95%">
+   <stop offset="0" stop-color="#f8fbfc"/>
+   <stop offset="0.16" stop-color="#c9d0d4"/>
+   <stop offset="0.34" stop-color="#70787d"/>
+   <stop offset="0.49" stop-color="#eef2f3"/>
+   <stop offset="0.66" stop-color="#9aa2a7"/>
+   <stop offset="0.82" stop-color="#d8dddf"/>
+   <stop offset="1" stop-color="#555d62"/>
+  </linearGradient>
   <radialGradient id="switchCap" cx="34%" cy="24%" r="76%">
    <stop offset="0" stop-color="#f8f5ec"/>
    <stop offset="0.24" stop-color="#c8c5bc"/>
@@ -42,7 +51,7 @@ viewBox="0 0 8853.8 6898.93"
     circle[r="515.9"] {fill:url(#switchBase);filter:url(#switchShadow);stroke:#7f878c;stroke-width:14}
     circle[r="348.02"] {fill:url(#switchMetal);stroke:#e0ddd4;stroke-width:12}
     circle[r="251.24"] {fill:url(#switchCap);stroke:#515553;stroke-width:14}
-    polygon.fil4 {stroke:#d5d2c9;stroke-width:16}
+    polygon.fil4 {fill:url(#nutMetal);stroke:#535b60;stroke-width:18;stroke-linejoin:round}
    ]]>
   </style>
  </defs>
@@ -62,35 +71,35 @@ viewBox="0 0 8853.8 6898.93"
   </g>
   <circle class="fil3 str0" cx="1164.92" cy="1119.37" r="515.9"/>
   <circle class="fil3 str0" cx="1164.92" cy="1119.37" r="348.02"/>
-  <circle class="fil3 str0" cx="1164.92" cy="1119.37" r="251.24"/>
   <polygon class="fil4 str0" points="1164.92,796.79 1304.61,877.44 1444.29,958.07 1444.29,1119.37 1444.29,1280.66 1304.61,1361.3 1164.92,1441.95 1025.24,1361.3 885.56,1280.66 885.56,1119.37 885.56,958.07 1025.24,877.44 "/>
+  <circle class="fil3 str0" cx="1164.92" cy="1119.37" r="251.24"/>
   <circle class="fil3 str0" cx="1164.92" cy="3483.35" r="515.9"/>
   <circle class="fil3 str0" cx="1164.92" cy="3483.35" r="348.02"/>
-  <circle class="fil3 str0" cx="1164.92" cy="3483.35" r="251.24"/>
   <polygon class="fil4 str0" points="1164.92,3160.77 1304.61,3241.42 1444.29,3322.05 1444.29,3483.35 1444.29,3644.64 1304.61,3725.28 1164.92,3805.93 1025.24,3725.28 885.56,3644.64 885.56,3483.35 885.56,3322.05 1025.24,3241.42 "/>
+  <circle class="fil3 str0" cx="1164.92" cy="3483.35" r="251.24"/>
   <circle class="fil3 str0" cx="1164.92" cy="5890.22" r="515.9"/>
   <circle class="fil3 str0" cx="1164.92" cy="5890.22" r="348.02"/>
-  <circle class="fil3 str0" cx="1164.92" cy="5890.22" r="251.24"/>
   <polygon class="fil4 str0" points="1164.92,5567.64 1304.61,5648.29 1444.29,5728.93 1444.29,5890.22 1444.29,6051.52 1304.61,6132.15 1164.92,6212.8 1025.24,6132.15 885.56,6051.52 885.56,5890.22 885.56,5728.93 1025.24,5648.29 "/>
+  <circle class="fil3 str0" cx="1164.92" cy="5890.22" r="251.24"/>
   <circle class="fil3 str0" cx="4433.24" cy="5890.22" r="515.9"/>
   <circle class="fil3 str0" cx="4433.24" cy="5890.22" r="348.02"/>
-  <circle class="fil3 str0" cx="4433.24" cy="5890.22" r="251.24"/>
   <polygon class="fil4 str0" points="4433.24,5567.64 4572.93,5648.29 4712.6,5728.93 4712.6,5890.22 4712.6,6051.52 4572.93,6132.15 4433.24,6212.8 4293.56,6132.15 4153.88,6051.52 4153.88,5890.22 4153.88,5728.93 4293.56,5648.29 "/>
+  <circle class="fil3 str0" cx="4433.24" cy="5890.22" r="251.24"/>
   <circle class="fil3 str0" cx="7701.56" cy="5890.22" r="515.9"/>
   <circle class="fil3 str0" cx="7701.56" cy="5890.22" r="348.02"/>
-  <circle class="fil3 str0" cx="7701.56" cy="5890.22" r="251.24"/>
   <polygon class="fil4 str0" points="7701.56,5567.64 7841.24,5648.29 7980.92,5728.93 7980.92,5890.22 7980.92,6051.52 7841.24,6132.15 7701.56,6212.8 7561.87,6132.15 7422.2,6051.52 7422.2,5890.22 7422.2,5728.93 7561.87,5648.29 "/>
+  <circle class="fil3 str0" cx="7701.56" cy="5890.22" r="251.24"/>
   <circle class="fil3 str0" cx="4433.24" cy="3496.91" r="515.9"/>
   <circle class="fil3 str0" cx="4433.24" cy="3496.91" r="348.02"/>
-  <circle class="fil3 str0" cx="4433.24" cy="3496.91" r="251.24"/>
   <polygon class="fil4 str0" points="4433.24,3174.33 4572.93,3254.98 4712.6,3335.62 4712.6,3496.91 4712.6,3658.21 4572.93,3738.85 4433.24,3819.49 4293.56,3738.85 4153.88,3658.21 4153.88,3496.91 4153.88,3335.62 4293.56,3254.98 "/>
+  <circle class="fil3 str0" cx="4433.24" cy="3496.91" r="251.24"/>
   <circle class="fil3 str0" cx="7701.56" cy="3496.91" r="515.9"/>
   <circle class="fil3 str0" cx="7701.56" cy="3496.91" r="348.02"/>
-  <circle class="fil3 str0" cx="7701.56" cy="3496.91" r="251.24"/>
   <polygon class="fil4 str0" points="7701.56,3174.33 7841.24,3254.98 7980.92,3335.62 7980.92,3496.91 7980.92,3658.21 7841.24,3738.85 7701.56,3819.49 7561.87,3738.85 7422.2,3658.21 7422.2,3496.91 7422.2,3335.62 7561.87,3254.98 "/>
+  <circle class="fil3 str0" cx="7701.56" cy="3496.91" r="251.24"/>
   <circle class="fil3 str0" cx="7701.56" cy="1119.37" r="515.9"/>
   <circle class="fil3 str0" cx="7701.56" cy="1119.37" r="348.02"/>
-  <circle class="fil3 str0" cx="7701.56" cy="1119.37" r="251.24"/>
   <polygon class="fil4 str0" points="7701.56,796.79 7841.24,877.44 7980.92,958.07 7980.92,1119.37 7980.92,1280.66 7841.24,1361.3 7701.56,1441.95 7561.87,1361.3 7422.2,1280.66 7422.2,1119.37 7422.2,958.07 7561.87,877.44 "/>
+  <circle class="fil3 str0" cx="7701.56" cy="1119.37" r="251.24"/>
  </g>
 </svg>
