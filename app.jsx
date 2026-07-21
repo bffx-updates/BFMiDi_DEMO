@@ -10225,12 +10225,25 @@ function DemoControllerModal({
   displayMeta, liveLayout, presetLayout, liveCustomLayout, presetCustomLayout,
   namePresetLive, namePresetBank, iconShape, presetIconShape, gigView,
   editorLayer, swModesL2, swParamsL2, swDisplayL2, bankLetterEnabled,
+  layer2Enabled, onSetEditorLayer, bankChangeMode,
+  switchOperationMode, hybridSwitchLayout,
+  globalSwMode, globalSwParams, globalSwDisplay,
+  layer2LedColor,
+  livePinGlobal2, global2SwMode, global2SwParams, global2SwDisplay,
 }) {
   const emptyLedPixels = () => Array.from({ length: 9 }, () => [false, false, false]);
   const [activeLedPixels, setActiveLedPixels] = useState(emptyLedPixels);
   const [spinStates, setSpinStates] = useState(() => Array(9).fill(-1));
   const [lastSections, setLastSections] = useState(() => Array(9).fill(0));
+  const [globalLedPixels, setGlobalLedPixels] = useState([false, false, false]);
+  const [globalSpinState, setGlobalSpinState] = useState(-1);
+  const [global2LedPixels, setGlobal2LedPixels] = useState([false, false, false]);
+  const [global2SpinState, setGlobal2SpinState] = useState(-1);
+  const [bankPreview, setBankPreview] = useState(null);
   const [pressedSwitch, setPressedSwitch] = useState(0);
+  const longPressTimerRef = useRef(null);
+  const suppressClickRef = useRef(false);
+  const clickTimersRef = useRef({});
   const modelInfo = MODELS.find((item) => item.id === model) || MODELS[0];
   const switchCount = Math.max(4, Math.min(8, Number(modelInfo?.switches) || 6));
   const displayWide = String(model).startsWith('BFMIDI-3');
@@ -10238,10 +10251,25 @@ function DemoControllerModal({
   // configuracoes e como "7SW+" em outras. As duas devem abrir o desenho real
   // de oito controles (6 numerados + LIVE/MODE + SW1/2/EXP).
   const hasSevenSwitchArtwork = /^BFMIDI-3 7(?:S|SW\+?)$/i.test(String(model).trim());
-  const letter = String.fromCharCode(65 + (bankLetterIndex || 0));
-  const tag = `${letter}${presetNumber || 1}`;
+  const selectedTag = `${String.fromCharCode(65 + (bankLetterIndex || 0))}${presetNumber || 1}`;
+  const visualBankIndex = bankPreview?.bank ?? bankLetterIndex ?? 0;
+  const visualPresetNumber = bankPreview?.preset ?? presetNumber ?? 1;
+  const letter = String.fromCharCode(65 + visualBankIndex);
+  const tag = `${letter}${visualPresetNumber}`;
   const demoNames = ['CLEAN AMBIENT', 'CRUNCH', 'LEAD', 'MODULATION', 'DELAY', 'SOLO'];
-  const displayName = String(displayMeta?.name?.trim() || bankDisplayName || demoNames[presetNumber - 1] || `PRESET ${tag}`);
+  const previewRawMeta = bankPreview ? getDemoSnapshot()?.presets?.[tag]?.meta : null;
+  const visualDisplayMeta = previewRawMeta ? metaFromApi(previewRawMeta) : displayMeta;
+  const displayName = String(visualDisplayMeta?.name?.trim() || bankDisplayName ||
+    demoNames[visualPresetNumber - 1] || `PRESET ${tag}`);
+  const nextEnabledBank = (from, direction = 1) => {
+    for (let step = 1; step <= BANK_LETTER_COUNT; step++) {
+      const candidate = (from + direction * step + BANK_LETTER_COUNT * 2) % BANK_LETTER_COUNT;
+      if (bankLetterEnabled?.[candidate]) return candidate;
+    }
+    return from;
+  };
+  const isHybridLiveSwitch = (sw) => switchMode === 'preset' && Number(switchOperationMode) === 1 &&
+    (Number(hybridSwitchLayout) === 2 ? sw <= 3 : sw >= 4);
   const liveModeName = (sw) => {
     const modeId = swModes?.[sw] || 'mute';
     const mode = SW_MODES.find((item) => item.id === modeId);
@@ -10253,7 +10281,17 @@ function DemoControllerModal({
     return swDisplay?.[sw]?.sigla || mode?.title || `SW ${sw}`;
   };
   const ledIndexFor = (sw) => {
-    if (sw > 6) return Number(liveLedColor) || 7;
+    if (sw === 7) {
+      const params = globalSwParams?.[globalSwMode] || DEFAULT_SW_PARAMS(globalSwMode || 'fx1');
+      return Number(params?.color) || 1;
+    }
+    if (sw === 8 && livePinGlobal2) {
+      const params = global2SwParams?.[global2SwMode] || DEFAULT_SW_PARAMS(global2SwMode || 'fx1');
+      return Number(params?.color) || 1;
+    }
+    if (sw > 7) return editorLayer === 2 && layer2Enabled
+      ? Number(layer2LedColor) || Number(liveLedColor) || 7
+      : Number(liveLedColor) || 7;
     if (ledColorMode === 'numeros') return Number(switchLedColors?.[sw - 1]) || 7;
     return Number(letterLedColors?.[bankLetterIndex]) || 7;
   };
@@ -10273,7 +10311,15 @@ function DemoControllerModal({
   // (pixel 1), 2=superior direito (pixel 3). E a mesma usada no firmware.
   const ledArcColorsFor = (sw) => {
     const fallback = ledFor(sw);
-    if (switchMode !== 'live' || sw > 6) return [fallback, fallback, fallback];
+    if (sw === 7) {
+      const params = { ...DEFAULT_SW_PARAMS(globalSwMode || 'fx1'), ...(globalSwParams?.[globalSwMode] || {}) };
+      return [colorFromParam(params.color2, fallback), fallback, colorFromParam(params.color3, fallback)];
+    }
+    if (sw === 8 && livePinGlobal2) {
+      const params = { ...DEFAULT_SW_PARAMS(global2SwMode || 'fx1'), ...(global2SwParams?.[global2SwMode] || {}) };
+      return [colorFromParam(params.color2, fallback), fallback, colorFromParam(params.color3, fallback)];
+    }
+    if ((switchMode !== 'live' && !isHybridLiveSwitch(sw)) || sw > 6) return [fallback, fallback, fallback];
     const { modeId, params } = modeParamsFor(sw);
     const colorA = colorFromParam(params.color, fallback);
     const colorB = colorFromParam(params.color2, colorA);
@@ -10317,65 +10363,435 @@ function DemoControllerModal({
     ? { modes: swModes, params: swParams, display: swDisplay }
     : { modes: swModesL2, params: swParamsL2, display: swDisplayL2 };
 
+  const liveButtonTap = () => {
+    if (switchMode === 'preset') {
+      onSetEditorLayer?.(1);
+      onSetSwitchMode('live');
+      return;
+    }
+    if (layer2Enabled) {
+      onSetEditorLayer?.(editorLayer === 2 ? 1 : 2);
+    } else {
+      onSetSwitchMode('preset');
+    }
+  };
+
+  const runSpecialCommand = (num) => {
+    const command = Number(num);
+    if (command === 128) { onNextBank(); return true; }
+    if (command === 129) { onPreviousBank(); return true; }
+    if (command === 130) { onSelectPreset((presetNumber % presetCount) + 1, bankLetterIndex); return true; }
+    if (command === 131) { onSelectPreset(((presetNumber + presetCount - 2) % presetCount) + 1, bankLetterIndex); return true; }
+    if (command === 132) { onSetSwitchMode('preset'); return true; }
+    if (command === 133) {
+      if (switchMode === 'live' && layer2Enabled) onSetEditorLayer?.(editorLayer === 2 ? 1 : 2);
+      return true;
+    }
+    if (command === 134) { liveButtonTap(); return true; }
+    return false;
+  };
+
+  const specialNumbersFor = (modeId, params) => {
+    if (modeId === 'macros') return parseMslots(params.mslots || '').filter((slot) => slot.t !== 1).map((slot) => slot.num);
+    if (modeId === 'momentary') return parseMomSlots(params.mom_slots || '').map((slot) => slot.num).concat(params.num);
+    if (modeId === 'single') return parseSingleSlots(params.sslots || '').filter((slot) => slot.t !== 1).map((slot) => slot.num)
+      .concat(Number(params.as_pc) === 1 ? [] : [params.num]);
+    if (modeId === 'tap_tempo') return parseTapSlots(params.tslots || '').map((slot) => slot.num);
+    if (modeId === 'spin') return parseSpinSlots(params.spin_slots || '').map((slot) => slot.num).concat(params.num);
+    return [params.num];
+  };
+
+  const runConfiguredSpecial = (modeId, params) => {
+    let handled = false;
+    for (const num of specialNumbersFor(modeId, params)) {
+      if (runSpecialCommand(num)) handled = true;
+    }
+    return handled;
+  };
+
   useEffect(() => {
     if (!open) return;
     const closeOnEscape = (event) => { if (event.key === 'Escape') onClose(); };
     window.addEventListener('keydown', closeOnEscape);
-    return () => window.removeEventListener('keydown', closeOnEscape);
+    return () => {
+      window.removeEventListener('keydown', closeOnEscape);
+      clearTimeout(longPressTimerRef.current);
+      Object.values(clickTimersRef.current).forEach(clearTimeout);
+      clickTimersRef.current = {};
+    };
   }, [open, onClose]);
 
   useEffect(() => {
-    setActiveLedPixels(emptyLedPixels());
+    const nextPixels = emptyLedPixels();
     setLastSections(Array(9).fill(0));
+    setBankPreview(null);
     const nextSpinStates = Array(9).fill(-1);
-    if (switchMode === 'live') {
-      for (let sw = 1; sw <= 6; sw++) {
-        if (swModes?.[sw] !== 'spin') continue;
-        const params = modeParamsFor(sw).params;
+    let lastSingle = -1;
+    for (let sw = 1; sw <= 6; sw++) {
+      const { modeId, params } = modeParamsFor(sw);
+      if (modeId === 'spin') {
         // Espelha SW_BANK.h: at_preset ativo inicia no estado/pixel 1.
         // Sem ele, o firmware fica awaiting (-1), piscando o mesmo pixel 1.
         nextSpinStates[sw] = Number(params.at_preset) !== 0 ? 0 : -1;
+      } else if (modeId === 'fx1' || modeId === 'fx2' || modeId === 'fx3') {
+        const stateA = Number(params.fav) !== 1 && Number(params.ch) >= 1 && Number(params.ch) <= 16
+          ? (Number(params.start) === 1) !== (Number(params.inv) === 1) : false;
+        const hasB = Number(params.ch2) >= 1 && Number(params.ch2) <= 16 || Number(params.fav2) === 1;
+        const hasC = modeId !== 'fx2' &&
+          (Number(params.ch3) >= 1 && Number(params.ch3) <= 16 || Number(params.fav3) === 1);
+        const stateB = Number(params.fav2) !== 1 && Number(params.ch2) >= 1 && Number(params.ch2) <= 16
+          ? (Number(params.start2) === 1) !== (Number(params.inv2) === 1) : false;
+        const stateC = Number(params.fav3) !== 1 && Number(params.ch3) >= 1 && Number(params.ch3) <= 16
+          ? (Number(params.start3) === 1) !== (Number(params.inv3) === 1) : false;
+        nextPixels[sw] = hasC ? [stateB, stateA, stateC]
+          : hasB ? [stateB, stateA, stateA] : [stateA, stateA, stateA];
+      } else if (modeId === 'macros') {
+        const on = (Number(params.start) === 1) !== (Number(params.inv) === 1);
+        nextPixels[sw] = [on, on, on];
+      } else if (modeId === 'ramp') {
+        const on = Number(params.start_on) === 1;
+        nextPixels[sw] = [on, on, on];
+      } else if (modeId === 'tap_tempo') {
+        nextPixels[sw] = [false, true, false];
+      } else if (modeId === 'single' && Number(params.at_preset) !== 0) {
+        const configured = parseSingleSlots(params.sslots || '').some((slot) =>
+          (slot.ch >= 1 && slot.ch <= 16) || (slot.t !== 1 && slot.num >= 128 && slot.num <= 134));
+        if (configured || (Number(params.ch) >= 1 && Number(params.ch) <= 16)) lastSingle = sw;
       }
     }
+    if (lastSingle > 0) nextPixels[lastSingle] = [true, true, true];
+    setActiveLedPixels(nextPixels);
     setSpinStates(nextSpinStates);
-  }, [tag, switchMode, swModes, swParams]);
+  }, [selectedTag, swModes, swParams]);
+
+  // O SW GLOBAL vive fora do preset e conserva seu estado entre trocas.
+  // Ele so apaga quando a opcao RESET ON PRESET estiver habilitada, como no firmware.
+  useEffect(() => {
+    const resetGlobal = (modeId, paramsByMode, setPixels, setSpin) => {
+      const params = { ...DEFAULT_SW_PARAMS(modeId), ...(paramsByMode?.[modeId] || {}) };
+      if (Number(params.reset_on_preset) !== 1) return;
+      setPixels([false, false, false]);
+      setSpin(-1);
+    };
+    resetGlobal(globalSwMode, globalSwParams, setGlobalLedPixels, setGlobalSpinState);
+    resetGlobal(global2SwMode, global2SwParams, setGlobal2LedPixels, setGlobal2SpinState);
+  }, [selectedTag]);
 
   if (!open) return null;
 
-  const press = (sw) => {
-    if (sw <= 6) {
-      if (switchMode === 'preset') {
-        if (sw <= presetCount) onSelectPreset(sw);
+  const flashPixels = (sw, mask = [true, true, true], duration = 170) => {
+    setActiveLedPixels((current) => {
+      const next = current.map((pixels) => [...pixels]);
+      next[sw] = next[sw].map((value, arc) => mask[arc] ? true : value);
+      return next;
+    });
+    window.setTimeout(() => setActiveLedPixels((current) => {
+      const next = current.map((pixels) => [...pixels]);
+      next[sw] = next[sw].map((value, arc) => mask[arc] ? false : value);
+      return next;
+    }), duration);
+  };
+
+  const toggleSection = (sw, section) => {
+    const mask = section === 1 ? [true, false, false]
+      : section === 2 ? [false, false, true] : primaryPixelMaskFor(sw);
+    setLastSections((current) => {
+      const next = [...current]; next[sw] = section; return next;
+    });
+    setActiveLedPixels((current) => {
+      const next = current.map((pixels) => [...pixels]);
+      const turnOn = !mask.every((enabled, arc) => !enabled || next[sw][arc]);
+      next[sw] = next[sw].map((value, arc) => mask[arc] ? turnOn : value);
+      return next;
+    });
+  };
+
+  const configuredFavorite = (params, section) => {
+    const suffix = section === 1 ? '2' : section === 2 ? '3' : '';
+    if (Number(params[`fav${suffix}`]) !== 1) return false;
+    const targetBank = clamp(params[`fav_bank${suffix}`], 0, BANK_LETTER_COUNT - 1);
+    const targetPreset = clamp(params[`fav_preset${suffix}`] || 1, 1, presetCount);
+    Promise.resolve(onSelectPreset(targetPreset, targetBank)).then(() => {
+      if (Number(params[`fav_mode${suffix}`]) === 1) {
+        onSetSwitchMode('live');
+        if (Number(params[`fav_layer${suffix}`]) === 1) onSetEditorLayer?.(2);
       } else {
-        if (swModes?.[sw] === 'spin') {
-          setSpinStates((current) => {
-            const next = [...current];
-            next[sw] = current[sw] < 0 ? 0 : (current[sw] + 1) % 3;
-            return next;
-          });
-          return;
-        }
-        const mask = primaryPixelMaskFor(sw);
-        setLastSections((current) => {
-          const next = [...current];
-          next[sw] = 0;
-          return next;
-        });
+        onSetSwitchMode('preset');
+      }
+    });
+    return true;
+  };
+
+  const pressLiveSwitch = (sw, section = 0) => {
+    const { modeId, params } = modeParamsFor(sw);
+    if (modeId === 'mute') return;
+    if ((modeId === 'fx1' || modeId === 'fx2' || modeId === 'fx3')) {
+      if (configuredFavorite(params, section)) return;
+      const suffix = section === 1 ? '2' : section === 2 ? '3' : '';
+      if (runSpecialCommand(params[`num${suffix}`])) return;
+      toggleSection(sw, section);
+      return;
+    }
+    if (section === 0 && runConfiguredSpecial(modeId, params)) return;
+    if (modeId === 'spin') {
+      if (section === 1) {
+        if (runSpecialCommand(params.lp_num)) return;
+        setLastSections((current) => { const next = [...current]; next[sw] = 1; return next; });
         setActiveLedPixels((current) => {
           const next = current.map((pixels) => [...pixels]);
-          const turnOn = !mask.every((enabled, arc) => !enabled || next[sw][arc]);
-          next[sw] = next[sw].map((value, arc) => mask[arc] ? turnOn : value);
+          const activeArc = spinStates[sw] === 1 ? 0 : spinStates[sw] === 2 ? 2 : 1;
+          const turnOn = !next[sw].some((value, arc) => arc !== activeArc && value);
+          next[sw] = next[sw].map((value, arc) => arc === activeArc ? false : turnOn);
           return next;
         });
+        return;
+      }
+      setSpinStates((current) => {
+        const next = [...current];
+        next[sw] = current[sw] < 0 ? 0 : (current[sw] + 1) % 3;
+        return next;
+      });
+      return;
+    }
+    if (modeId === 'single') {
+      if (section > 0) {
+        const field = section === 1 ? 'lslots' : 'rslots';
+        let handled = false;
+        for (const slot of parseSingleSlots(params[field] || '')) {
+          if (slot.t !== 1 && runSpecialCommand(slot.num)) handled = true;
+        }
+        if (handled) return;
+      }
+      setActiveLedPixels((current) => current.map((pixels, index) =>
+        index > 0 && swModes?.[index] === 'single'
+          ? (index === sw ? [true, true, true] : [false, false, false])
+          : [...pixels]));
+      setLastSections((current) => { const next = [...current]; next[sw] = section; return next; });
+      return;
+    }
+    if (modeId === 'momentary' || modeId === 'tap_tempo') {
+      if (modeId === 'tap_tempo' && section === 1 && runSpecialCommand(params.lp_num)) return;
+      flashPixels(sw);
+      return;
+    }
+    if (modeId === 'ramp' && Number(params.trigger) === 1) {
+      flashPixels(sw, [true, true, true], 240);
+      return;
+    }
+    // STOMP/MACROS/RAMP toggle/loop: o estado permanece ate o proximo toque.
+    toggleSection(sw, 0);
+  };
+
+  const pressGlobalSwitch = (section = 0, second = false) => {
+    const modeId = (second ? global2SwMode : globalSwMode) || 'fx1';
+    const paramsByMode = second ? global2SwParams : globalSwParams;
+    const setPixels = second ? setGlobal2LedPixels : setGlobalLedPixels;
+    const setSpin = second ? setGlobal2SpinState : setGlobalSpinState;
+    const params = { ...DEFAULT_SW_PARAMS(modeId), ...(paramsByMode?.[modeId] || {}) };
+    if (modeId === 'mute') return;
+    if ((modeId === 'fx1' || modeId === 'fx2' || modeId === 'fx3')) {
+      if (configuredFavorite(params, section)) return;
+      const suffix = section === 1 ? '2' : section === 2 ? '3' : '';
+      if (runSpecialCommand(params[`num${suffix}`])) return;
+    } else if (section === 0 && runConfiguredSpecial(modeId, params)) return;
+    if (modeId === 'spin') {
+      if (section === 1) {
+        if (runSpecialCommand(params.lp_num)) return;
+        setPixels((pixels) => {
+          const on = !pixels.some(Boolean); return [on, on, on];
+        });
+        return;
+      }
+      setSpin((state) => state < 0 ? 0 : (state + 1) % 3);
+      setPixels([true, true, true]);
+      return;
+    }
+    if (modeId === 'momentary' || modeId === 'single' || modeId === 'tap_tempo' ||
+        (modeId === 'ramp' && Number(params.trigger) === 1)) {
+      if ((modeId === 'tap_tempo' || modeId === 'spin') && section === 1 &&
+          runSpecialCommand(params.lp_num)) return;
+      setPixels([true, true, true]);
+      window.setTimeout(() => setPixels([false, false, false]), 180);
+      return;
+    }
+    setPixels((pixels) => {
+      const turnOn = !pixels.some(Boolean);
+      return [turnOn, turnOn, turnOn];
+    });
+  };
+
+  const selectPresetLikeFirmware = (sw) => {
+    const previewMode = Number(bankChangeMode) === 3;
+    if (bankPreview) {
+      const targetBank = bankPreview.preset === sw
+        ? nextEnabledBank(bankPreview.bank, 1) : bankPreview.bank;
+      setBankPreview({ bank: targetBank, preset: sw });
+      return;
+    }
+    if (previewMode) {
+      setBankPreview({ bank: bankLetterIndex, preset: sw });
+      return;
+    }
+    const targetBank = sw === presetNumber
+      ? nextEnabledBank(bankLetterIndex, 1) : bankLetterIndex;
+    onSelectPreset(sw, targetBank);
+  };
+
+  const press = (sw) => {
+    if (sw <= 6) {
+      if (switchMode === 'preset' && !isHybridLiveSwitch(sw)) {
+        if (sw <= presetCount) selectPresetLikeFirmware(sw);
+      } else {
+        pressLiveSwitch(sw, 0);
       }
       return;
     }
-    if (sw === 7) onNextBank();
-    if (sw === 8) onSetSwitchMode(switchMode === 'live' ? 'preset' : 'live');
+    if (sw === 7) pressGlobalSwitch(0);
+    if (sw === 8) livePinGlobal2 ? pressGlobalSwitch(0, true) : liveButtonTap();
+  };
+
+  const longPress = (sw) => {
+    if (sw === 8 && livePinGlobal2) {
+      const modeId = global2SwMode || 'fx1';
+      const params = { ...DEFAULT_SW_PARAMS(modeId), ...(global2SwParams?.[modeId] || {}) };
+      const hasB = Number(params.ch2) >= 1 && Number(params.ch2) <= 16 || Number(params.fav2) === 1;
+      if (modeId === 'fx1' || modeId === 'fx2' || modeId === 'fx3') {
+        if (hasB) pressGlobalSwitch(1, true);
+        else {
+          pressGlobalSwitch(0, true);
+          window.setTimeout(() => pressGlobalSwitch(0, true), 120);
+        }
+      } else {
+        pressGlobalSwitch(1, true);
+      }
+      return;
+    }
+    if (sw === 8) {
+      // LIVE_MODE_PIN: segurar em LIVE sempre volta ao BANK; em BANK entra LIVE.
+      if (switchMode === 'preset') onSetEditorLayer?.(1);
+      onSetSwitchMode(switchMode === 'live' ? 'preset' : 'live');
+      return;
+    }
+    if (sw === 7) {
+      const modeId = globalSwMode || 'fx1';
+      const params = { ...DEFAULT_SW_PARAMS(modeId), ...(globalSwParams?.[modeId] || {}) };
+      const hasB = Number(params.ch2) >= 1 && Number(params.ch2) <= 16 || Number(params.fav2) === 1;
+      if (modeId === 'fx1' || modeId === 'fx2' || modeId === 'fx3') {
+        if (hasB) pressGlobalSwitch(1);
+        else {
+          pressGlobalSwitch(0);
+          window.setTimeout(() => pressGlobalSwitch(0), 120);
+        }
+      } else {
+        pressGlobalSwitch(1);
+      }
+      return;
+    }
+    if (switchMode === 'preset' && !isHybridLiveSwitch(sw)) {
+      if (Number(bankChangeMode) === 2) {
+        if (sw === presetNumber) {
+          onSetEditorLayer?.(1);
+          onSetSwitchMode('live');
+        }
+        return;
+      }
+      if (bankPreview) {
+        onSelectPreset(bankPreview.preset, bankPreview.bank);
+        setBankPreview(null);
+      } else if (Number(bankChangeMode) === 3 || sw === presetNumber) {
+        setBankPreview({ bank: bankLetterIndex, preset: sw });
+      }
+      return;
+    }
+    const { modeId, params } = modeParamsFor(sw);
+    const hasB = Number(params.ch2) >= 1 && Number(params.ch2) <= 16 || Number(params.fav2) === 1;
+    if (modeId === 'fx1' || modeId === 'fx2' || modeId === 'fx3') {
+      if (hasB) pressLiveSwitch(sw, 1);
+      else {
+        // STOMP tier 1 e momentaneo no hold: liga no limite e reverte logo
+        // apos a soltura. A animacao curta representa esse pulso no simulador.
+        toggleSection(sw, 0);
+        window.setTimeout(() => toggleSection(sw, 0), 120);
+      }
+    } else if (modeId === 'macros') {
+      toggleSection(sw, 0);
+      window.setTimeout(() => toggleSection(sw, 0), 120);
+    } else if (modeId === 'tap_tempo' || modeId === 'spin' || modeId === 'single') {
+      pressLiveSwitch(sw, 1);
+    }
+  };
+
+  const needsDoubleClickWindow = (sw) => {
+    if ((sw === 8 && !livePinGlobal2) || (sw <= 6 && switchMode === 'preset' && !isHybridLiveSwitch(sw))) return false;
+    const global = sw === 7 || (sw === 8 && livePinGlobal2);
+    const second = sw === 8;
+    const modeId = global ? ((second ? global2SwMode : globalSwMode) || 'fx1') : modeParamsFor(sw).modeId;
+    const params = global
+      ? { ...DEFAULT_SW_PARAMS(modeId), ...((second ? global2SwParams : globalSwParams)?.[modeId] || {}) }
+      : modeParamsFor(sw).params;
+    if (modeId === 'fx3') return true;
+    if (modeId === 'fx1') {
+      return (Number(params.ch3) >= 1 && Number(params.ch3) <= 16) || Number(params.fav3) === 1;
+    }
+    if (modeId === 'single') {
+      return parseSingleSlots(params.rslots || '').some((slot) =>
+        (slot.ch >= 1 && slot.ch <= 16) || (slot.t !== 1 && slot.num >= 128 && slot.num <= 134));
+    }
+    return false;
+  };
+
+  const doublePress = (sw) => {
+    if (sw <= 6) pressLiveSwitch(sw, 2);
+    else if (sw === 7) pressGlobalSwitch(2);
+    else if (sw === 8 && livePinGlobal2) pressGlobalSwitch(2, true);
+  };
+
+  const queueShortPress = (sw) => {
+    if (!needsDoubleClickWindow(sw)) {
+      press(sw);
+      return;
+    }
+    if (clickTimersRef.current[sw]) {
+      clearTimeout(clickTimersRef.current[sw]);
+      delete clickTimersRef.current[sw];
+      doublePress(sw);
+      return;
+    }
+    clickTimersRef.current[sw] = window.setTimeout(() => {
+      delete clickTimersRef.current[sw];
+      press(sw);
+    }, 350);
+  };
+
+  const handleSwitchPointerDown = (sw) => {
+    setPressedSwitch(sw);
+    suppressClickRef.current = false;
+    clearTimeout(longPressTimerRef.current);
+    const modeId = sw <= 6 ? modeParamsFor(sw).modeId
+      : sw === 7 ? globalSwMode : livePinGlobal2 ? global2SwMode : '';
+    const threshold = sw === 8 && !livePinGlobal2 ? 600 : modeId === 'tap_tempo' ? 650 : 300;
+    longPressTimerRef.current = window.setTimeout(() => {
+      suppressClickRef.current = true;
+      longPress(sw);
+    }, threshold);
+  };
+
+  const handleSwitchPointerUp = () => {
+    clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = null;
+    setPressedSwitch(0);
+  };
+
+  const handleSwitchClick = (sw) => {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
+    }
+    queueShortPress(sw);
   };
 
   const toggleLedArc = (sw, arc) => {
-    if (switchMode !== 'live' || sw < 1 || sw > 6) return;
+    if ((switchMode !== 'live' && !isHybridLiveSwitch(sw)) || sw < 1 || sw > 6) return;
     if (swModes?.[sw] === 'spin') {
       // Clique direto no arco tambem seleciona o estado SPIN correspondente.
       const stateByArc = [1, 0, 2];
@@ -10413,10 +10829,10 @@ function DemoControllerModal({
 
   // Coordenadas originais do viewBox 8853.8 x 6898.93 do 7SW.svg.
   // Na 7SW+, o controle 8 corresponde ao footswitch LIVE/MODE e o controle 7
-  // representa o seletor/encoder SW1/2 + EXP.
+  // representa o SW GLOBAL (marcado SW1/2 + EXP na arte da placa).
   const sevenSwitchControls = [
     { sw: 8, cx: 1164.92, cy: 1119.37, label: 'LIVE / MODE' },
-    { sw: 7, cx: 7701.56, cy: 1119.37, label: 'Seletor SW1/2 e EXP' },
+    { sw: 7, cx: 7701.56, cy: 1119.37, label: 'SW GLOBAL · SW1/2 e EXP' },
     { sw: 4, cx: 1164.92, cy: 3483.35, label: 'Footswitch 4' },
     { sw: 5, cx: 4433.24, cy: 3496.91, label: 'Footswitch 5' },
     { sw: 6, cx: 7701.56, cy: 3496.91, label: 'Footswitch 6' },
@@ -10428,7 +10844,7 @@ function DemoControllerModal({
   const virtualDisplay = (
     <Bfmidi480Display
       model={model} switchMode={switchMode} gigView={gigView}
-      tag={tag} label={displayName} meta={displayMeta}
+      tag={tag} label={displayName} meta={visualDisplayMeta}
       liveLayout={liveLayout} presetLayout={presetLayout}
       liveCustomLayout={liveCustomLayout} presetCustomLayout={presetCustomLayout}
       namePresetLive={namePresetLive} namePresetBank={namePresetBank}
@@ -10480,27 +10896,29 @@ function DemoControllerModal({
                 {sevenSwitchControls.map(({ sw, cx, cy, label }) => {
                   const disabled = sw <= 6 && sw > presetCount;
                   const litArcs = sw === 8
-                    ? [switchMode === 'live', switchMode === 'live', switchMode === 'live']
+                    ? (livePinGlobal2 ? global2LedPixels
+                      : [switchMode === 'live', switchMode === 'live', switchMode === 'live'])
                     : sw === 7
-                      ? [false, false, false]
-                      : switchMode === 'preset'
-                        ? [sw === presetNumber, sw === presetNumber, sw === presetNumber]
+                      ? globalLedPixels
+                      : switchMode === 'preset' && !isHybridLiveSwitch(sw)
+                        ? [sw === visualPresetNumber, sw === visualPresetNumber, sw === visualPresetNumber]
                         : swModes?.[sw] === 'spin'
-                          ? spinArcsForState(spinStates[sw])
+                          ? spinArcsForState(spinStates[sw]).map((value, arc) =>
+                              value || !!activeLedPixels[sw]?.[arc])
                           : activeLedPixels[sw] || [false, false, false];
                   const arcColors = ledArcColorsFor(sw);
                   const isActive = litArcs.some(Boolean);
                   return (
                     <g key={sw} role="button" tabIndex={disabled ? -1 : 0}
                        aria-label={label} aria-disabled={disabled ? 'true' : 'false'}
-                       onPointerDown={() => !disabled && setPressedSwitch(sw)}
-                       onPointerUp={() => setPressedSwitch(0)}
-                       onPointerCancel={() => setPressedSwitch(0)}
-                       onClick={() => !disabled && press(sw)}
+                       onPointerDown={() => !disabled && handleSwitchPointerDown(sw)}
+                       onPointerUp={handleSwitchPointerUp}
+                       onPointerCancel={handleSwitchPointerUp}
+                       onClick={() => !disabled && handleSwitchClick(sw)}
                        onKeyDown={(event) => {
                          if (!disabled && (event.key === 'Enter' || event.key === ' ')) {
                            event.preventDefault();
-                           press(sw);
+                           handleSwitchClick(sw);
                          }
                        }}>
                       <circle cx={cx} cy={cy} r="515.9"
@@ -10514,8 +10932,8 @@ function DemoControllerModal({
                            onClick={(event) => {
                              event.stopPropagation();
                              if (!disabled) {
-                               if (switchMode === 'live' && sw <= 6) toggleLedArc(sw, arc);
-                               else press(sw);
+                               if ((switchMode === 'live' || isHybridLiveSwitch(sw)) && sw <= 6) toggleLedArc(sw, arc);
+                               else handleSwitchClick(sw);
                              }
                            }}>
                           <path d={ringSegmentPath(cx, cy, angle)} className="bf-demo-led-segment-outline" />
@@ -10540,19 +10958,23 @@ function DemoControllerModal({
           <div className="bf-demo-foots" style={{ '--switch-count': switchCount }}>
             {Array.from({ length: switchCount }, (_, index) => index + 1).map((sw) => {
               const disabled = sw <= 6 && sw > presetCount;
-              const isActive = switchMode === 'preset'
-                ? sw === presetNumber
+              const isActive = sw === 7 ? globalLedPixels.some(Boolean)
+                : sw === 8 ? (livePinGlobal2 ? global2LedPixels.some(Boolean) : switchMode === 'live')
+                : switchMode === 'preset' && !isHybridLiveSwitch(sw)
+                ? sw === visualPresetNumber
                 : activeSwitches.has(sw);
-              const specialLabel = sw === 7 ? 'BANK +' : sw === 8 ? 'LIVE' : '';
+              const specialLabel = sw === 7 ? 'GLOBAL'
+                : sw === 8 ? (livePinGlobal2 ? 'GLOBAL 2'
+                  : switchMode === 'live' && layer2Enabled ? `LAYER ${editorLayer}` : 'LIVE') : '';
               return (
                 <button key={sw} type="button"
                   className={'bf-demo-foot' + (isActive ? ' is-active' : '') +
                     (pressedSwitch === sw ? ' is-pressed' : '') + (disabled ? ' is-disabled' : '')}
                   style={{ '--led-color': ledFor(sw) }}
-                  onPointerDown={() => setPressedSwitch(sw)}
-                  onPointerUp={() => setPressedSwitch(0)}
-                  onPointerCancel={() => setPressedSwitch(0)}
-                  onClick={() => !disabled && press(sw)}
+                  onPointerDown={() => handleSwitchPointerDown(sw)}
+                  onPointerUp={handleSwitchPointerUp}
+                  onPointerCancel={handleSwitchPointerUp}
+                  onClick={() => !disabled && handleSwitchClick(sw)}
                   disabled={disabled}
                   aria-label={specialLabel || `${switchMode === 'preset' ? 'Selecionar preset' : 'Acionar'} ${sw}`}>
                   <span className="bf-demo-foot-led" />
@@ -10568,7 +10990,7 @@ function DemoControllerModal({
         </div>
 
         <div className="bf-demo-modal-foot">
-          <p>Use os footswitches para testar bancos e modos. Em LIVE, clique diretamente em cada segmento do aro para testar os 3 pixels.</p>
+          <p>Toque no preset ativo para avançar o banco. Segure para LONG PRESS e toque duas vezes para RECLICK. Em LIVE, os modos e os 3 pixels seguem a configuração salva.</p>
           <button type="button" className="bf-demo-reset" onClick={() => {
             if (window.confirm('Restaurar todos os dados da demonstração?')) {
               resetDemoMemory();
@@ -17432,7 +17854,8 @@ function App() {
         presetNumber={presetNumber}
         bankDisplayName={bankDisplayName}
         presetCount={presetCountEdit}
-        onSelectPreset={(number) => selectBank(bankLetterIndex, number)}
+        onSelectPreset={(number, targetLetterIndex = bankLetterIndex) =>
+          selectBank(targetLetterIndex, number)}
         onPreviousBank={prevBankLetter}
         onNextBank={nextBankLetter}
         swModes={swModes}
@@ -17458,6 +17881,19 @@ function App() {
         swParamsL2={swParamsL2}
         swDisplayL2={swDisplayL2}
         bankLetterEnabled={bankLetterEnabled}
+        layer2Enabled={layer2Enabled}
+        onSetEditorLayer={toggleEditorLayer}
+        bankChangeMode={bankChangeMode}
+        switchOperationMode={switchOperationMode}
+        hybridSwitchLayout={hybridSwitchLayout}
+        globalSwMode={globalSwMode}
+        globalSwParams={globalSwParams}
+        globalSwDisplay={globalSwDisplay}
+        layer2LedColor={layer2LedColor}
+        livePinGlobal2={livePinGlobal2}
+        global2SwMode={global2SwMode}
+        global2SwParams={global2SwParams}
+        global2SwDisplay={global2SwDisplay}
       />
       {wifiResult && (
         <div className="bf-modal-backdrop" onClick={() => setWifiResult(null)}>

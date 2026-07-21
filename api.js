@@ -492,6 +492,8 @@ async function route(method, path, body) {
       if (/^[A-J][1-6]$/.test(tag)) {
         memory.current.bank_letter_index = BANK_LETTERS.indexOf(tag[0]);
         memory.current.preset_number = Number(tag[1]);
+        // swBankSet/swBankApplyPreset sempre volta o runtime para o Layer 1.
+        memory.current.live_layer = 1;
         saveMemory();
       }
     }
@@ -520,7 +522,9 @@ async function route(method, path, body) {
     return { bank: tag, sw_params: { ...memory.swParams[tag] } };
   }
   if (method === 'POST' && url.pathname === '/mode') {
-    memory.current.switch_mode = Number(url.searchParams.get('value')) === 1 ? 1 : 0;
+    const enteringLive = Number(url.searchParams.get('value')) === 1;
+    memory.current.switch_mode = enteringLive ? 1 : 0;
+    if (enteringLive) memory.current.live_layer = 1;
     saveMemory();
     return bankResponse();
   }
