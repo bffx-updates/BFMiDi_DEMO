@@ -6111,7 +6111,6 @@ button.bf-select-btn {
   transition: stroke .14s ease, filter .14s ease, opacity .14s ease;
   vector-effect: non-scaling-stroke;
 }
-.bf-demo-seven-switch-controls g:hover .bf-demo-seven-switch-control,
 .bf-demo-seven-switch-controls g:focus-visible .bf-demo-seven-switch-control {
   stroke: color-mix(in srgb, var(--led-color) 55%, transparent);
   filter: drop-shadow(0 0 8px color-mix(in srgb, var(--led-color) 45%, transparent));
@@ -6149,11 +6148,6 @@ button.bf-select-btn {
   filter:
     brightness(var(--demo-brightness))
     drop-shadow(0 0 18px color-mix(in srgb, var(--segment-color) 82%, transparent));
-}
-.bf-demo-led-segment:hover .bf-demo-led-segment-fill {
-  filter:
-    brightness(1.08)
-    drop-shadow(0 0 12px color-mix(in srgb, var(--segment-color) 48%, transparent));
 }
 .bf-demo-seven-switch-controls g[aria-disabled="true"] { cursor: default; }
 .bf-demo-seven-switch-control.is-disabled { opacity: .25; }
