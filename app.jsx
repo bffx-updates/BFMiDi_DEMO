@@ -9963,7 +9963,10 @@ function DemoControllerModal({
   const modelInfo = MODELS.find((item) => item.id === model) || MODELS[0];
   const switchCount = Math.max(4, Math.min(8, Number(modelInfo?.switches) || 6));
   const displayWide = String(model).startsWith('BFMIDI-3');
-  const hasSevenSwitchArtwork = /^BFMIDI-3 7SW\+?$/i.test(String(model).trim());
+  // O firmware historicamente salva esta mesma carcaca como "7S" em algumas
+  // configuracoes e como "7SW+" em outras. As duas devem abrir o desenho real
+  // de oito controles (6 numerados + LIVE/MODE + SW1/2/EXP).
+  const hasSevenSwitchArtwork = /^BFMIDI-3 7(?:S|SW\+?)$/i.test(String(model).trim());
   const letter = String.fromCharCode(65 + (bankLetterIndex || 0));
   const tag = `${letter}${presetNumber || 1}`;
   const demoNames = ['CLEAN AMBIENT', 'CRUNCH', 'LEAD', 'MODULATION', 'DELAY', 'SOLO'];
@@ -10083,7 +10086,7 @@ function DemoControllerModal({
           {hasSevenSwitchArtwork ? (
             <div className="bf-demo-seven-switch-stage">
               <img className="bf-demo-seven-switch-art" src="icons/controllers/7SW.svg"
-                   alt="Desenho da controladora BFMIDI-3 7SW+" draggable="false" />
+                   alt="Desenho da controladora BFMIDI-3 com oito controles" draggable="false" />
               <div className="bf-demo-seven-switch-display">{virtualDisplay}</div>
               <svg className="bf-demo-seven-switch-controls" viewBox="0 0 8853.8 6898.93"
                    preserveAspectRatio="xMidYMid meet" aria-label="Controles interativos da 7SW+">
