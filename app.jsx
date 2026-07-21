@@ -10138,6 +10138,7 @@ function Bfmidi480Display({
   namePresetLive, namePresetBank, iconShape, presetIconShape,
   layer1, layer2, editorLayer, bankLetterEnabled,
   activeLedPixels, spinStates, lastSections,
+  bpmOverlay,
 }) {
   useImageStore();
   const resolution = displayResolutionFor(model);
@@ -10210,6 +10211,21 @@ function Bfmidi480Display({
             <Demo480Name meta={frameMeta} label={label}
               area={demo480NameArea(layout, presetMode, customMode)} />
           )}
+          {bpmOverlay?.visible && (
+            <g className="bf-demo-bpm-overlay" role="status"
+               aria-label={`${bpmOverlay.bpm} BPM`}>
+              <rect x="100" y="94" width="280" height="132" rx="16"
+                    fill="#000" stroke="#fff" strokeWidth="1" />
+              <rect x="101" y="95" width="278" height="130" rx="15"
+                    fill="none" stroke="#fff" strokeWidth="1" />
+              <text x="240" y="104" textAnchor="middle" dominantBaseline="hanging"
+                    fill="#888" fontFamily="Arial, Helvetica, sans-serif"
+                    fontSize="17" fontWeight="700">BPM</text>
+              <text x="240" y="172" textAnchor="middle" dominantBaseline="middle"
+                    fill="#fff" fontFamily="Arial Black, Arial, Helvetica, sans-serif"
+                    fontSize="75" fontWeight="800">{bpmOverlay.bpm}</text>
+            </g>
+          )}
         </svg>
       </div>
     </div>
@@ -10230,6 +10246,7 @@ function DemoControllerModal({
   globalSwMode, globalSwParams, globalSwDisplay,
   layer2LedColor,
   livePinGlobal2, global2SwMode, global2SwParams, global2SwDisplay,
+  bpmCardSecs, bpmCardAvg,
 }) {
   const emptyLedPixels = () => Array.from({ length: 9 }, () => [false, false, false]);
   const [activeLedPixels, setActiveLedPixels] = useState(emptyLedPixels);
@@ -10241,11 +10258,18 @@ function DemoControllerModal({
   const [global2SpinState, setGlobal2SpinState] = useState(-1);
   const [globalTapRuntime, setGlobalTapRuntime] = useState({ lastTapMs: 0, intervalMs: 0, phase: 0 });
   const [global2TapRuntime, setGlobal2TapRuntime] = useState({ lastTapMs: 0, intervalMs: 0, phase: 0 });
+  const [liveTapRuntimes, setLiveTapRuntimes] = useState(() =>
+    Array.from({ length: 9 }, () => ({ intervalMs: 0, phase: 0, nextAt: performance.now() + 300 })));
+  const [bpmOverlay, setBpmOverlay] = useState({ visible: false, bpm: 0, untilMs: 0 });
   const [bankPreview, setBankPreview] = useState(null);
   const [pressedSwitch, setPressedSwitch] = useState(0);
   const longPressTimerRef = useRef(null);
   const suppressClickRef = useRef(false);
   const clickTimersRef = useRef({});
+  const globalTapLastMsRef = useRef(0);
+  const global2TapLastMsRef = useRef(0);
+  const liveTapLastMsRef = useRef(Array(9).fill(0));
+  const bpmSequenceRef = useRef({ sumMs: 0, count: 0, lastIntervalMs: 0 });
   const modelInfo = MODELS.find((item) => item.id === model) || MODELS[0];
   const switchCount = Math.max(4, Math.min(8, Number(modelInfo?.switches) || 6));
   const displayWide = String(model).startsWith('BFMIDI-3');
@@ -10427,6 +10451,11 @@ function DemoControllerModal({
     const nextPixels = emptyLedPixels();
     setLastSections(Array(9).fill(0));
     setBankPreview(null);
+    liveTapLastMsRef.current = Array(9).fill(0);
+    const tapStartMs = performance.now();
+    setLiveTapRuntimes(Array.from({ length: 9 }, () => ({
+      intervalMs: 0, phase: 0, nextAt: tapStartMs + 300,
+    })));
     const nextSpinStates = Array(9).fill(-1);
     let lastSingle = -1;
     for (let sw = 1; sw <= 6; sw++) {
@@ -10482,12 +10511,14 @@ function DemoControllerModal({
   // O firmware reinicia o runtime do GLOBAL quando seu modo muda. Em TAP,
   // o estado ocioso ja nasce no pixel fisico 1 e continua ciclando 1/2/3.
   useEffect(() => {
+    globalTapLastMsRef.current = 0;
     setGlobalTapRuntime({ lastTapMs: 0, intervalMs: 0, phase: 0 });
     setGlobalLedPixels(globalSwMode === 'tap_tempo'
       ? spinArcsForState(0) : [false, false, false]);
   }, [globalSwMode]);
 
   useEffect(() => {
+    global2TapLastMsRef.current = 0;
     setGlobal2TapRuntime({ lastTapMs: 0, intervalMs: 0, phase: 0 });
     setGlobal2LedPixels(global2SwMode === 'tap_tempo'
       ? spinArcsForState(0) : [false, false, false]);
@@ -10536,6 +10567,88 @@ function DemoControllerModal({
     }, delay);
     return () => window.clearTimeout(timer);
   }, [open, global2SwMode, global2TapRuntime.intervalMs, global2TapRuntime.phase]);
+
+  // Os TAPs dos SW1..6 usam a mesma animacao do firmware. Um unico timer
+  // atende todos os switches ativos e acorda apenas no proximo deadline.
+  useEffect(() => {
+    if (!open) return undefined;
+    const active = Array.from({ length: 6 }, (_, index) => index + 1).filter((sw) =>
+      swModes?.[sw] === 'tap_tempo' &&
+      (switchMode === 'live' || (switchMode === 'preset' && Number(switchOperationMode) === 1 &&
+        (Number(hybridSwitchLayout) === 2 ? sw <= 3 : sw >= 4))));
+    if (!active.length) return undefined;
+    const now = performance.now();
+    const deadline = Math.min(...active.map((sw) => liveTapRuntimes[sw]?.nextAt || now));
+    const timer = window.setTimeout(() => {
+      const tickNow = performance.now();
+      setLiveTapRuntimes((current) => current.map((runtime, sw) => {
+        if (!active.includes(sw) || (runtime.nextAt || 0) > tickNow + 2) return runtime;
+        const phase = runtime.intervalMs > 0
+          ? ((runtime.phase + 1) & 1) : ((runtime.phase + 1) % 3);
+        const onMs = tapLedOnMs(runtime.intervalMs);
+        const step = runtime.intervalMs > 0
+          ? (phase === 1 ? onMs : Math.max(60, runtime.intervalMs - onMs))
+          : 300;
+        let nextAt = (runtime.nextAt || tickNow) + step;
+        const cycleMs = runtime.intervalMs > 0 ? runtime.intervalMs : 300;
+        if (tickNow - nextAt > cycleMs) nextAt = tickNow + step;
+        return { ...runtime, phase, nextAt };
+      }));
+    }, Math.max(1, deadline - now));
+    return () => window.clearTimeout(timer);
+  }, [open, switchMode, switchOperationMode, hybridSwitchLayout, swModes, liveTapRuntimes]);
+
+  useEffect(() => {
+    if (!open) return;
+    setActiveLedPixels((current) => {
+      const next = current.map((pixels) => [...pixels]);
+      for (let sw = 1; sw <= 6; sw++) {
+        const hybridLive = switchMode === 'preset' && Number(switchOperationMode) === 1 &&
+          (Number(hybridSwitchLayout) === 2 ? sw <= 3 : sw >= 4);
+        if (swModes?.[sw] !== 'tap_tempo' || (switchMode !== 'live' && !hybridLive)) continue;
+        const runtime = liveTapRuntimes[sw];
+        next[sw] = runtime.intervalMs > 0
+          ? (runtime.phase === 1 ? [true, true, true] : [false, false, false])
+          : spinArcsForState(runtime.phase);
+      }
+      return next;
+    });
+  }, [open, switchMode, switchOperationMode, hybridSwitchLayout, swModes, liveTapRuntimes]);
+
+  // O card some no prazo configurado, contado a partir do ultimo intervalo
+  // valido. Alterar a configuracao para OFF remove imediatamente o overlay.
+  useEffect(() => {
+    if (!bpmOverlay.visible) return undefined;
+    if (Number(bpmCardSecs) <= 0) {
+      setBpmOverlay({ visible: false, bpm: 0, untilMs: 0 });
+      return undefined;
+    }
+    const remaining = Math.max(0, bpmOverlay.untilMs - performance.now());
+    const timer = window.setTimeout(() => {
+      setBpmOverlay((current) => current.untilMs === bpmOverlay.untilMs
+        ? { ...current, visible: false } : current);
+    }, remaining);
+    return () => window.clearTimeout(timer);
+  }, [bpmOverlay.visible, bpmOverlay.untilMs, bpmCardSecs]);
+
+  const showBpmForInterval = (rawIntervalMs) => {
+    const secs = clamp(Number(bpmCardSecs) || 0, 0, 30);
+    if (secs <= 0) return;
+    const intervalMs = clamp(Math.round(rawIntervalMs), 100, 3000);
+    const now = performance.now();
+    const sequence = bpmSequenceRef.current;
+    if (sequence.count === 0 || now - sequence.lastIntervalMs > 2500) {
+      sequence.sumMs = 0;
+      sequence.count = 0;
+    }
+    sequence.sumMs += intervalMs;
+    sequence.count += 1;
+    sequence.lastIntervalMs = now;
+    const shownMs = bpmCardAvg && sequence.count > 1
+      ? Math.floor(sequence.sumMs / sequence.count) : intervalMs;
+    const bpm = Math.floor((60000 + Math.floor(shownMs / 2)) / shownMs);
+    setBpmOverlay({ visible: true, bpm, untilMs: now + secs * 1000 });
+  };
 
   if (!open) return null;
 
@@ -10592,7 +10705,12 @@ function DemoControllerModal({
       toggleSection(sw, section);
       return;
     }
-    if (section === 0 && runConfiguredSpecial(modeId, params)) return;
+    if (section === 0) {
+      const handled = runConfiguredSpecial(modeId, params);
+      // Os slots MIDI/comandos fazem parte do toque, mas no TAP o mesmo gesto
+      // tambem precisa alimentar o relogio e o card de BPM.
+      if (handled && modeId !== 'tap_tempo') return;
+    }
     if (modeId === 'spin') {
       if (section === 1) {
         if (runSpecialCommand(params.lp_num)) return;
@@ -10629,8 +10747,15 @@ function DemoControllerModal({
       setLastSections((current) => { const next = [...current]; next[sw] = section; return next; });
       return;
     }
-    if (modeId === 'momentary' || modeId === 'tap_tempo') {
-      if (modeId === 'tap_tempo' && section === 1 && runSpecialCommand(params.lp_num)) return;
+    if (modeId === 'tap_tempo') {
+      if (section === 1) {
+        if (runSpecialCommand(params.lp_num)) return;
+        return;
+      }
+      registerLiveTap(sw);
+      return;
+    }
+    if (modeId === 'momentary') {
       flashPixels(sw);
       return;
     }
@@ -10642,21 +10767,39 @@ function DemoControllerModal({
     toggleSection(sw, 0);
   };
 
+  const registerLiveTap = (sw) => {
+    const now = performance.now();
+    const lastTapMs = liveTapLastMsRef.current[sw] || 0;
+    liveTapLastMsRef.current[sw] = now;
+    const elapsed = lastTapMs > 0 ? now - lastTapMs : 0;
+    if (elapsed > 0 && elapsed <= 2500) {
+      const intervalMs = clamp(Math.round(elapsed), 100, 3000);
+      setLiveTapRuntimes((current) => current.map((runtime, index) => index === sw
+        ? { ...runtime, intervalMs, phase: 1, nextAt: now + tapLedOnMs(intervalMs) }
+        : runtime));
+      showBpmForInterval(intervalMs);
+      return;
+    }
+    setLiveTapRuntimes((current) => current.map((runtime, index) => index === sw
+      ? { ...runtime, intervalMs: 0, nextAt: runtime.nextAt > now ? runtime.nextAt : now + 300 }
+      : runtime));
+  };
+
   const registerGlobalTap = (second = false) => {
     const now = performance.now();
+    const lastRef = second ? global2TapLastMsRef : globalTapLastMsRef;
+    const lastTapMs = lastRef.current;
+    lastRef.current = now;
+    const elapsed = lastTapMs > 0 ? now - lastTapMs : 0;
     const setRuntime = second ? setGlobal2TapRuntime : setGlobalTapRuntime;
-    setRuntime((current) => {
-      const elapsed = current.lastTapMs > 0 ? now - current.lastTapMs : 0;
-      if (elapsed > 0 && elapsed <= 2500) {
-        return {
-          lastTapMs: now,
-          intervalMs: clamp(Math.round(elapsed), 100, 3000),
-          phase: 1,
-        };
-      }
-      // Primeiro toque (ou toque depois de 2,5s): volta ao ciclo ocioso.
-      return { lastTapMs: now, intervalMs: 0, phase: current.phase % 3 };
-    });
+    if (elapsed > 0 && elapsed <= 2500) {
+      const intervalMs = clamp(Math.round(elapsed), 100, 3000);
+      setRuntime({ lastTapMs: now, intervalMs, phase: 1 });
+      showBpmForInterval(intervalMs);
+      return;
+    }
+    // Primeiro toque (ou toque depois de 2,5s): volta ao ciclo ocioso.
+    setRuntime((current) => ({ lastTapMs: now, intervalMs: 0, phase: current.phase % 3 }));
   };
 
   const pressGlobalSwitch = (section = 0, second = false) => {
@@ -10942,6 +11085,7 @@ function DemoControllerModal({
       bankLetterEnabled={bankLetterEnabled}
       activeLedPixels={activeLedPixels} spinStates={spinStates}
       lastSections={lastSections}
+      bpmOverlay={bpmOverlay}
     />
   );
 
@@ -17982,6 +18126,8 @@ function App() {
         global2SwMode={global2SwMode}
         global2SwParams={global2SwParams}
         global2SwDisplay={global2SwDisplay}
+        bpmCardSecs={bpmCardSecs}
+        bpmCardAvg={bpmCardAvg}
       />
       {wifiResult && (
         <div className="bf-modal-backdrop" onClick={() => setWifiResult(null)}>
