@@ -6025,6 +6025,88 @@ button.bf-select-btn {
   border: 1px solid rgba(255,255,255,.035);
   border-radius: inherit;
 }
+.bf-demo-controller.is-seven-switch-artwork {
+  padding: 0;
+  overflow: hidden;
+  border-color: rgba(0, 175, 239, .7);
+  border-radius: clamp(12px, 1.5vw, 20px);
+  background: #f5f7fb;
+  box-shadow:
+    inset 0 1px rgba(255,255,255,.9),
+    0 22px 48px rgba(0,0,0,.46);
+}
+.bf-demo-controller.is-seven-switch-artwork::before { display: none; }
+.bf-demo-seven-switch-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 8853.8 / 6898.93;
+  overflow: hidden;
+  background: #f5f7fb;
+  user-select: none;
+}
+.bf-demo-seven-switch-art {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.bf-demo-seven-switch-display {
+  position: absolute;
+  left: 28.95%;
+  top: 5.95%;
+  width: 42.25%;
+  height: 36.15%;
+}
+.bf-demo-seven-switch-display .bf-demo-display {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  margin: 0;
+  padding: clamp(3px, .55vw, 7px);
+  border-radius: clamp(5px, .75vw, 10px);
+}
+.bf-demo-seven-switch-display .bf-demo-display-glass {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+}
+.bf-demo-seven-switch-control {
+  position: absolute;
+  z-index: 3;
+  width: 11.7%;
+  aspect-ratio: 1;
+  padding: 0;
+  transform: translate(-50%, -50%);
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255,255,255,.001);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.bf-demo-seven-switch-control span {
+  position: absolute;
+  inset: 5%;
+  border: 3px solid transparent;
+  border-radius: inherit;
+  transition: border-color .14s ease, box-shadow .14s ease, background .14s ease;
+}
+.bf-demo-seven-switch-control:hover span {
+  border-color: color-mix(in srgb, var(--led-color) 45%, transparent);
+}
+.bf-demo-seven-switch-control.is-active span,
+.bf-demo-seven-switch-control.is-pressed span {
+  border-color: var(--led-color);
+  background: color-mix(in srgb, var(--led-color) 7%, transparent);
+  box-shadow:
+    0 0 10px 2px color-mix(in srgb, var(--led-color) 72%, transparent),
+    inset 0 0 14px color-mix(in srgb, var(--led-color) 28%, transparent);
+}
+.bf-demo-seven-switch-control.is-pressed {
+  transform: translate(-50%, -48%) scale(.96);
+}
+.bf-demo-seven-switch-control.is-disabled { cursor: default; opacity: .28; }
 .bf-demo-brandline {
   display: flex;
   align-items: baseline;
@@ -6236,6 +6318,7 @@ button.bf-select-btn {
   .bf-demo-modal-head { padding: 16px; }
   .bf-demo-toolbar { padding: 10px 16px; flex-wrap: wrap; }
   .bf-demo-controller { margin: 14px; padding: 20px 16px; }
+  .bf-demo-controller.is-seven-switch-artwork { padding: 0; }
   .bf-demo-display { width: 86%; margin-bottom: 30px; }
   .bf-demo-controller.is-4sw .bf-demo-foots { grid-template-columns: repeat(2, 1fr); row-gap: 24px; }
   .bf-demo-controller.is-6sw .bf-demo-foots { grid-template-columns: repeat(3, 1fr); gap: 18px 10px; }
@@ -6251,6 +6334,11 @@ button.bf-select-btn {
   .bf-demo-brandline { margin-bottom: 14px; }
   .bf-demo-controller.is-8sw .bf-demo-foots { grid-template-columns: repeat(4, 1fr); }
   .bf-demo-display-live { gap: 3%; padding: 4%; }
+  .bf-demo-controller.is-seven-switch-artwork { margin-inline: 8px; }
+  .bf-demo-seven-switch-display .bf-demo-display { padding: 3px; }
+  .bf-demo-seven-switch-display .bf-demo-display-top { letter-spacing: .06em; }
+  .bf-demo-seven-switch-display .bf-demo-display-name { font-size: 12px; }
+  .bf-demo-seven-switch-display .bf-demo-display-tag { font-size: 18px; }
 }
 .bf-studio-np-esw-master {
   margin-top: 10px;

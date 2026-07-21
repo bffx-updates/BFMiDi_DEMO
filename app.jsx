@@ -9963,6 +9963,7 @@ function DemoControllerModal({
   const modelInfo = MODELS.find((item) => item.id === model) || MODELS[0];
   const switchCount = Math.max(4, Math.min(8, Number(modelInfo?.switches) || 6));
   const displayWide = String(model).startsWith('BFMIDI-3');
+  const hasSevenSwitchArtwork = model === 'BFMIDI-3 7SW+';
   const letter = String.fromCharCode(65 + (bankLetterIndex || 0));
   const tag = `${letter}${presetNumber || 1}`;
   const demoNames = ['CLEAN AMBIENT', 'CRUNCH', 'LEAD', 'MODULATION', 'DELAY', 'SOLO'];
@@ -10006,6 +10007,50 @@ function DemoControllerModal({
     if (sw === 8) onSetSwitchMode(switchMode === 'live' ? 'preset' : 'live');
   };
 
+  // Posicoes medidas diretamente no viewBox 8853.8 x 6898.93 do 7SW.svg.
+  // Na 7SW+, o controle 8 corresponde ao footswitch LIVE/MODE e o controle 7
+  // representa o seletor/encoder SW1/2 + EXP.
+  const sevenSwitchControls = [
+    { sw: 8, x: 13.16, y: 16.23, label: 'LIVE / MODE' },
+    { sw: 7, x: 86.99, y: 16.23, label: 'Seletor SW1/2 e EXP' },
+    { sw: 4, x: 13.16, y: 50.49, label: 'Footswitch 4' },
+    { sw: 5, x: 50.07, y: 50.69, label: 'Footswitch 5' },
+    { sw: 6, x: 86.99, y: 50.69, label: 'Footswitch 6' },
+    { sw: 1, x: 13.16, y: 85.38, label: 'Footswitch 1' },
+    { sw: 2, x: 50.07, y: 85.38, label: 'Footswitch 2' },
+    { sw: 3, x: 86.99, y: 85.38, label: 'Footswitch 3' },
+  ];
+
+  const virtualDisplay = (
+    <div className={`bf-demo-display${displayWide ? ' is-480' : ' is-320'}`}>
+      <div className="bf-demo-display-glass">
+        <div className="bf-demo-display-top">
+          <span>{switchMode === 'live' ? 'LIVE MODE' : 'PRESET MODE'}</span>
+          <span className="bf-demo-display-status">● LOCAL</span>
+        </div>
+        {switchMode === 'preset' ? (
+          <div className="bf-demo-display-preset">
+            <div className="bf-demo-display-tag">{tag}</div>
+            <div className="bf-demo-display-name">{displayName}</div>
+            <div className="bf-demo-display-meta">
+              <span>BANK {letter}</span><span>PRESET {presetNumber}</span><span>MIDI CH 1</span>
+            </div>
+          </div>
+        ) : (
+          <div className="bf-demo-display-live">
+            {Array.from({ length: Math.min(6, presetCount) }, (_, index) => index + 1).map((sw) => (
+              <div key={sw} className={'bf-demo-display-live-tile' + (activeSwitches.has(sw) ? ' is-on' : '')}
+                   style={{ '--switch-color': ledFor(sw) }}>
+                <span>SW{sw}</span>
+                <strong>{liveModeName(sw)}</strong>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   return ReactDOM.createPortal(
     <div className="bf-demo-modal-backdrop" role="presentation" onClick={onClose}>
       <div className="bf-demo-modal" role="dialog" aria-modal="true"
@@ -10033,40 +10078,41 @@ function DemoControllerModal({
           </div>
         </div>
 
-        <div className={`bf-demo-controller is-${switchCount}sw${displayWide ? ' is-wide-display' : ''}`}
+        <div className={`bf-demo-controller is-${switchCount}sw${displayWide ? ' is-wide-display' : ''}${hasSevenSwitchArtwork ? ' is-seven-switch-artwork' : ''}`}
              style={{ '--demo-brightness': Math.max(0.25, Number(brightness || 72) / 100) }}>
+          {hasSevenSwitchArtwork ? (
+            <div className="bf-demo-seven-switch-stage">
+              <img className="bf-demo-seven-switch-art" src="icons/controllers/7SW.svg"
+                   alt="Desenho da controladora BFMIDI-3 7SW+" draggable="false" />
+              <div className="bf-demo-seven-switch-display">{virtualDisplay}</div>
+              {sevenSwitchControls.map(({ sw, x, y, label }) => {
+                const disabled = sw <= 6 && sw > presetCount;
+                const isActive = sw === 8
+                  ? switchMode === 'live'
+                  : switchMode === 'preset' ? sw === presetNumber : activeSwitches.has(sw);
+                return (
+                  <button key={sw} type="button"
+                    className={'bf-demo-seven-switch-control' + (isActive ? ' is-active' : '') +
+                      (pressedSwitch === sw ? ' is-pressed' : '') + (disabled ? ' is-disabled' : '')}
+                    style={{ left: `${x}%`, top: `${y}%`, '--led-color': ledFor(sw) }}
+                    onPointerDown={() => setPressedSwitch(sw)}
+                    onPointerUp={() => setPressedSwitch(0)}
+                    onPointerCancel={() => setPressedSwitch(0)}
+                    onClick={() => !disabled && press(sw)}
+                    disabled={disabled}
+                    aria-label={label}>
+                    <span />
+                  </button>
+                );
+              })}
+            </div>
+          ) : (<>
           <div className="bf-demo-brandline">
             <span className="bf-demo-brand">BF<span>MIDI</span></span>
             <span>{modelInfo?.tag || 'BFMIDI'} · DEMO</span>
           </div>
 
-          <div className={`bf-demo-display${displayWide ? ' is-480' : ' is-320'}`}>
-            <div className="bf-demo-display-glass">
-              <div className="bf-demo-display-top">
-                <span>{switchMode === 'live' ? 'LIVE MODE' : 'PRESET MODE'}</span>
-                <span className="bf-demo-display-status">● LOCAL</span>
-              </div>
-              {switchMode === 'preset' ? (
-                <div className="bf-demo-display-preset">
-                  <div className="bf-demo-display-tag">{tag}</div>
-                  <div className="bf-demo-display-name">{displayName}</div>
-                  <div className="bf-demo-display-meta">
-                    <span>BANK {letter}</span><span>PRESET {presetNumber}</span><span>MIDI CH 1</span>
-                  </div>
-                </div>
-              ) : (
-                <div className="bf-demo-display-live">
-                  {Array.from({ length: Math.min(6, presetCount) }, (_, index) => index + 1).map((sw) => (
-                    <div key={sw} className={'bf-demo-display-live-tile' + (activeSwitches.has(sw) ? ' is-on' : '')}
-                         style={{ '--switch-color': ledFor(sw) }}>
-                      <span>SW{sw}</span>
-                      <strong>{liveModeName(sw)}</strong>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+          {virtualDisplay}
 
           <div className="bf-demo-foots" style={{ '--switch-count': switchCount }}>
             {Array.from({ length: switchCount }, (_, index) => index + 1).map((sw) => {
@@ -10095,6 +10141,7 @@ function DemoControllerModal({
               );
             })}
           </div>
+          </>)}
         </div>
 
         <div className="bf-demo-modal-foot">
