@@ -9952,44 +9952,69 @@ function GLayoutMiniSketch({ layout, selected, iconShape, custom = false, custom
 // Simulador visual da controladora. É alimentado pelo mesmo estado editado no
 // webApp, portanto modelo, banco, preset, nomes, modos e LEDs aparecem sem
 // qualquer equipamento físico conectado.
-// Geometria dos layouts de icon_draw_live_layout() no firmware da BFMIDI-3.
-// Todas as medidas estao em pixels do framebuffer real 480x320.
-function demo480LayoutRects(layout, customLayout, presetMode) {
+// Geometria dos layouts de icon_draw_live_layout() no firmware. As medidas
+// seguem o framebuffer real: 480x320 nas BFMIDI-3 grandes e 320x240 nas
+// BFMIDI-1/2 e BFMIDI-3 MICRO. Placas MICRO/4S usam a variante de 4 switches.
+function demo480LayoutRects(layout, customLayout, presetMode,
+  { screenW = 480, screenH = 320, is4sw = false } = {}) {
   const rects = [];
   const addRow = (switches, y, w, h, gapX, xStart, layer) => {
     switches.forEach((sw, col) => rects.push({
       sw, layer, x: xStart + col * (w + gapX), y, w, h, layout,
     }));
   };
+  const useLG = screenW >= 400;
+  const cols = is4sw ? 2 : 3;
+  const rowSwitches = is4sw ? 4 : 6;
   if (layout === 1) {
-    const w = 150, h = 120, stripH = 56, gapX = 7, gapY = 6;
+    const w = useLG ? 150 : 100;
+    const h = useLG ? 120 : 80;
+    const stripH = useLG ? 56 : 40;
+    const gapX = Math.trunc((screenW - cols * w) / (cols + 1));
+    const gapY = Math.trunc((screenH - (2 * h + stripH)) / 4);
     const yStrip = gapY + h + gapY;
-    addRow([4, 5, 6], gapY, w, h, gapX, gapX, 1);
-    addRow([1, 2, 3], yStrip + stripH + gapY, w, h, gapX, gapX, 1);
+    addRow(is4sw ? [3, 4] : [4, 5, 6], gapY, w, h, gapX, gapX, 1);
+    addRow(is4sw ? [1, 2] : [1, 2, 3], yStrip + stripH + gapY,
+      w, h, gapX, gapX, 1);
   } else if (layout === 2) {
-    const w = 150, h = 150, gapX = 7, gapY = 6;
-    addRow([4, 5, 6], gapY, w, h, gapX, gapX, 1);
-    addRow([1, 2, 3], gapY + h + gapY, w, h, gapX, gapX, 1);
+    const w = useLG ? 150 : 100;
+    const h = useLG ? 150 : 100;
+    const gapX = Math.trunc((screenW - cols * w) / (cols + 1));
+    const gapY = Math.trunc((screenH - 2 * h) / 3);
+    addRow(is4sw ? [3, 4] : [4, 5, 6], gapY, w, h, gapX, gapX, 1);
+    addRow(is4sw ? [1, 2] : [1, 2, 3], gapY + h + gapY,
+      w, h, gapX, gapX, 1);
   } else if (layout === 3) {
-    const w = 70, h = 70, gapX = 8, gapY = 56, stripH = 80;
-    addRow([1, 2, 3, 4, 5, 6], gapY + stripH + gapY + (presetMode ? 10 : 0),
+    const w = useLG ? 70 : 47;
+    const h = useLG ? 70 : 47;
+    const stripH = useLG ? 80 : 56;
+    const gapX = Math.trunc((screenW - rowSwitches * w) / (rowSwitches + 1));
+    const gapY = Math.trunc((screenH - stripH - h) / 3);
+    addRow(Array.from({ length: rowSwitches }, (_, index) => index + 1),
+      gapY + stripH + gapY + (presetMode ? 10 : 0),
       w, h, gapX, gapX, 1);
   } else if (layout === 4) {
-    const w = 70, h = 70, gapX = 8, gapY = 39, stripH = 56, innerGapY = 6;
+    const w = useLG ? 70 : 47;
+    const h = useLG ? 70 : 47;
+    const stripH = useLG ? 56 : 40;
+    const innerGapY = useLG ? 6 : 4;
+    const gapX = Math.trunc((screenW - rowSwitches * w) / (rowSwitches + 1));
+    const gapY = Math.trunc((screenH - (stripH + 2 * h + innerGapY)) / 3);
     const yStrip = gapY + 20;
     const yL1 = yStrip + stripH + gapY;
-    addRow([1, 2, 3, 4, 5, 6], yL1, w, h, gapX, gapX, 1);
-    addRow([1, 2, 3, 4, 5, 6], yL1 + h + innerGapY, w, h, gapX, gapX, 2);
+    const switches = Array.from({ length: rowSwitches }, (_, index) => index + 1);
+    addRow(switches, yL1, w, h, gapX, gapX, 1);
+    addRow(switches, yL1 + h + innerGapY, w, h, gapX, gapX, 2);
   } else {
     const items = Array.isArray(customLayout) ? customLayout : makeDefaultCustomLayout();
-    items.slice(0, 6).forEach((item, index) => {
+    items.slice(0, is4sw ? 4 : 6).forEach((item, index) => {
       if (!item?.enabled) return;
       const sizePct = clamp(item.size, CUSTOM_LAYOUT_MIN_SIZE, CUSTOM_LAYOUT_MAX_SIZE);
-      const tile = Math.max(20, Math.min(320, Math.floor(320 * sizePct / 100)));
+      const tile = Math.max(20, Math.min(screenH, Math.floor(screenH * sizePct / 100)));
       rects.push({
         sw: index + 1, layer: 1,
-        x: Math.floor((480 - tile) * clamp(item.x, 0, 100) / 100),
-        y: Math.floor((320 - tile) * clamp(item.y, 0, 100) / 100),
+        x: Math.floor((screenW - tile) * clamp(item.x, 0, 100) / 100),
+        y: Math.floor((screenH - tile) * clamp(item.y, 0, 100) / 100),
         w: tile, h: tile, layout: 2,
       });
     });
@@ -9997,11 +10022,35 @@ function demo480LayoutRects(layout, customLayout, presetMode) {
   return rects;
 }
 
-function demo480NameArea(layout, presetMode, customMode) {
-  if (presetMode || customMode) return { x: 0, y: 0, w: 480, h: 320 };
-  if (layout === 1) return { x: 7, y: 132, w: 464, h: 56 };
-  if (layout === 3) return { x: 8, y: 56, w: 460, h: 80 };
-  if (layout === 4) return { x: 8, y: 59, w: 460, h: 56 };
+function demo480NameArea(layout, presetMode, customMode,
+  { screenW = 480, screenH = 320, is4sw = false } = {}) {
+  if (presetMode || customMode) return { x: 0, y: 0, w: screenW, h: screenH };
+  const useLG = screenW >= 400;
+  const cols = is4sw ? (layout === 1 ? 2 : 4) : (layout === 1 ? 3 : 6);
+  if (layout === 1) {
+    const tileW = useLG ? 150 : 100, tileH = useLG ? 120 : 80;
+    const stripH = useLG ? 56 : 40;
+    const gapX = Math.trunc((screenW - cols * tileW) / (cols + 1));
+    const gapY = Math.trunc((screenH - (2 * tileH + stripH)) / 4);
+    return { x: gapX, y: gapY + tileH + gapY,
+      w: cols * tileW + (cols - 1) * gapX, h: stripH };
+  }
+  if (layout === 3) {
+    const tileW = useLG ? 70 : 47, tileH = tileW;
+    const stripH = useLG ? 80 : 56;
+    const gapX = Math.trunc((screenW - cols * tileW) / (cols + 1));
+    const gapY = Math.trunc((screenH - stripH - tileH) / 3);
+    return { x: gapX, y: gapY,
+      w: cols * tileW + (cols - 1) * gapX, h: stripH };
+  }
+  if (layout === 4) {
+    const tileW = useLG ? 70 : 47, tileH = tileW;
+    const stripH = useLG ? 56 : 40, innerGapY = useLG ? 6 : 4;
+    const gapX = Math.trunc((screenW - cols * tileW) / (cols + 1));
+    const gapY = Math.trunc((screenH - (stripH + 2 * tileH + innerGapY)) / 3);
+    return { x: gapX, y: gapY + 20,
+      w: cols * tileW + (cols - 1) * gapX, h: stripH };
+  }
   return null;
 }
 
@@ -10085,11 +10134,11 @@ function Demo480Tile({ disp, on, shape, layoutId, width, height }) {
   );
 }
 
-function Demo480Name({ meta, label, area, classic = false }) {
+function Demo480Name({ meta, label, area, classic = false, big = true }) {
   if (!area) return null;
   const frameMeta = { ...DEFAULT_PRESET_META(), ...(meta || {}) };
   const style = npFrameStyle(frameMeta, 1,
-    { x: frameMeta.nameX ?? 50, y: frameMeta.nameY ?? 50 }, classic, false);
+    { x: frameMeta.nameX ?? 50, y: frameMeta.nameY ?? 50 }, classic ? big : false, false);
   if (!classic) {
     style.padding = '8px 14px';
     style.borderRadius = '10px';
@@ -10142,15 +10191,12 @@ function Bfmidi480Display({
 }) {
   useImageStore();
   const resolution = displayResolutionFor(model);
-  if (resolution.w !== 480 || resolution.h !== 320) {
-    return (
-      <div className="bf-demo-display is-320">
-        <div className="bf-demo-display-glass bf-demo-display-unavailable">
-          SIMULAÇÃO DE DISPLAY DISPONÍVEL PARA BFMIDI-3 · 480×320
-        </div>
-      </div>
-    );
-  }
+  const screenW = resolution.w;
+  const screenH = resolution.h;
+  const big = screenW >= 400;
+  const modelInfo = MODELS.find((item) => item.id === model);
+  const is4sw = Number(modelInfo?.switches) <= 4;
+  const displayGeometry = { screenW, screenH, is4sw };
   const displayMode = gigView === 'preset' ? 'preset' : gigView === 'live' ? 'live' : switchMode;
   const presetMode = displayMode === 'preset';
   const layout = Number(presetMode ? presetLayout : liveLayout) || (presetMode ? 0 : 1);
@@ -10161,13 +10207,23 @@ function Bfmidi480Display({
   const showName = presetMode ? namePresetBank : namePresetLive;
   const shape = presetMode ? presetIconShape : iconShape;
   const rects = (presetMode && layout === 0) || (presetMode && layout === 5)
-    ? [] : demo480LayoutRects(layout, presetMode ? presetCustomLayout : liveCustomLayout, presetMode);
+    ? [] : demo480LayoutRects(layout, presetMode ? presetCustomLayout : liveCustomLayout,
+      presetMode, displayGeometry);
   const list = presetMode && layout === 5 ? demo480ListLabels(tag, label, bankLetterEnabled) : null;
   const layerData = (layer) => layer === 2 ? layer2 : layer1;
+  const listCenterH = Math.min(screenH, Math.max(34,
+    Math.round((frameMeta.fontSize || 18) * 1.2) + (big ? 20 : 16)));
+  const listRowH = Math.floor((screenH - listCenterH) / 6);
+  const bpmW = big ? 280 : 200;
+  const bpmH = big ? 132 : 92;
+  const bpmX = (screenW - bpmW) / 2;
+  const bpmY = (screenH - bpmH) / 2;
   return (
-    <div className="bf-demo-display is-480">
+    <div className={`bf-demo-display ${big ? 'is-480' : 'is-320'}`}>
       <div className="bf-demo-display-glass" style={{ background: background === 'transparent' ? '#000' : background }}>
-        <svg className="bf-demo-480-svg" viewBox="0 0 480 320" preserveAspectRatio="none" aria-label={`Display BFMIDI-3 ${displayMode.toUpperCase()}`}>
+        <svg className="bf-demo-480-svg" viewBox={`0 0 ${screenW} ${screenH}`}
+             preserveAspectRatio="none"
+             aria-label={`Display ${model} ${screenW} por ${screenH} ${displayMode.toUpperCase()}`}>
           {rects.map((rect, index) => {
             // Layout 4 mostra os dois layers. Os demais seguem o layer ativo,
             // exatamente como currentLiveLayer no firmware.
@@ -10187,13 +10243,16 @@ function Bfmidi480Display({
             );
           })}
           {presetMode && layout === 0 && showName && (
-            <Demo480Name meta={frameMeta} label={label} area={{ x: 0, y: 0, w: 480, h: 320 }} classic />
+            <Demo480Name meta={frameMeta} label={label}
+              area={{ x: 0, y: 0, w: screenW, h: screenH }} classic big={big} />
           )}
           {list && (
-            <foreignObject x="0" y="0" width="480" height="320">
+            <foreignObject x="0" y="0" width={screenW} height={screenH}>
               <div xmlns="http://www.w3.org/1999/xhtml" className="bf-demo-480-list" style={{
                 color: paletteCssSolid(frameMeta.nameColorId),
                 fontWeight: frameMeta.fontBold ? 700 : 400,
+                fontSize: `${big ? 18 : 15}px`,
+                gridTemplateRows: `repeat(3, ${listRowH}px) ${listCenterH}px repeat(3, ${listRowH}px)`,
               }}>
                 {[...list.next].reverse().map((name, i) => <span key={`n${i}`}>{name}</span>)}
                 <strong style={{
@@ -10209,21 +10268,24 @@ function Bfmidi480Display({
           )}
           {!list && !(presetMode && layout === 0) && showName && (
             <Demo480Name meta={frameMeta} label={label}
-              area={demo480NameArea(layout, presetMode, customMode)} />
+              area={demo480NameArea(layout, presetMode, customMode, displayGeometry)} big={big} />
           )}
           {bpmOverlay?.visible && (
             <g className="bf-demo-bpm-overlay" role="status"
                aria-label={`${bpmOverlay.bpm} BPM`}>
-              <rect x="100" y="94" width="280" height="132" rx="16"
+              <rect x={bpmX} y={bpmY} width={bpmW} height={bpmH} rx={big ? 16 : 12}
                     fill="#000" stroke="#fff" strokeWidth="1" />
-              <rect x="101" y="95" width="278" height="130" rx="15"
+              <rect x={bpmX + 1} y={bpmY + 1} width={bpmW - 2} height={bpmH - 2}
+                    rx={big ? 15 : 11}
                     fill="none" stroke="#fff" strokeWidth="1" />
-              <text x="240" y="104" textAnchor="middle" dominantBaseline="hanging"
+              <text x={screenW / 2} y={bpmY + (big ? 10 : 7)}
+                    textAnchor="middle" dominantBaseline="hanging"
                     fill="#888" fontFamily="Arial, Helvetica, sans-serif"
-                    fontSize="17" fontWeight="700">BPM</text>
-              <text x="240" y="172" textAnchor="middle" dominantBaseline="middle"
+                    fontSize={big ? 17 : 12} fontWeight="700">BPM</text>
+              <text x={screenW / 2} y={bpmY + bpmH / 2 + (big ? 12 : 9)}
+                    textAnchor="middle" dominantBaseline="middle"
                     fill="#fff" fontFamily="Arial Black, Arial, Helvetica, sans-serif"
-                    fontSize="75" fontWeight="800">{bpmOverlay.bpm}</text>
+                    fontSize={big ? 75 : 48} fontWeight="800">{bpmOverlay.bpm}</text>
             </g>
           )}
         </svg>

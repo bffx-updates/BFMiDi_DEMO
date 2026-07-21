@@ -6188,6 +6188,7 @@ button.bf-select-btn {
   box-shadow: 0 0 0 1px rgba(255,255,255,.025);
 }
 .bf-demo-display.is-480 .bf-demo-display-glass { aspect-ratio: 3 / 2; }
+.bf-demo-display.is-320 .bf-demo-display-glass { aspect-ratio: 4 / 3; }
 .bf-demo-480-svg {
   display: block;
   width: 100%;
