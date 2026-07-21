@@ -12110,7 +12110,7 @@ async function usbBackupChunked(setProgress) {
   return out;
 }
 
-function BackupRestoreCard({ getGlobalConfigForBackup }) {
+function BackupRestoreCard({ getGlobalConfigForBackup, onRestored }) {
   const [status, setStatus] = useState({ kind: 'idle', msg: '' });
   // progress: { phase, pct, bytes, total } — pct/total opcionais.
   const [progress, setProgress] = useState(null);
@@ -12471,6 +12471,7 @@ function BackupRestoreCard({ getGlobalConfigForBackup }) {
              + t('sys.backup.resApplied') + ` · ${fmtKB(restoreBody.length)}`,
         });
         setProgress(null);
+        if (onRestored) await onRestored();
       } catch (err) {
         setStatus({ kind: 'error', msg: t('common.fail') + err.message });
         setProgress(null);
@@ -12479,7 +12480,7 @@ function BackupRestoreCard({ getGlobalConfigForBackup }) {
       }
     };
     input.click();
-  }, [t, getGlobalConfigForBackup]);
+  }, [t, getGlobalConfigForBackup, onRestored]);
 
   const isBusy = status.kind === 'loading';
   return (
@@ -12793,6 +12794,7 @@ function SinglePresetCard() {
 // ─── SYSTEM ─────────────────────────────────────────────────────────
 function PageSystemConfig({
   onOpenWifi, sysSectionReq, onSysSectionApplied, getGlobalConfigForBackup,
+  onBackupRestored,
   model, setModel,
   switchOperationMode, setSwitchOperationMode,
   hybridSwitchLayout, setHybridSwitchLayout,
@@ -13750,7 +13752,10 @@ function PageSystemConfig({
 
       {section === 'backup' && (
         <div className="bf-stack-centered">
-          <BackupRestoreCard getGlobalConfigForBackup={getGlobalConfigForBackup} />
+          <BackupRestoreCard
+            getGlobalConfigForBackup={getGlobalConfigForBackup}
+            onRestored={onBackupRestored}
+          />
           <SinglePresetCard />
           <EraseDataCard onErased={onErased} />
           <StorageCard />
@@ -16264,6 +16269,17 @@ function App() {
       }
     } catch {/* preview */}
   };
+
+  // Na controladora real o restore reinicia o firmware e os polls recarregam
+  // tudo. Na DEMO não há reboot: invalida os caches e refaz as leituras assim
+  // que o JSON termina de ser aplicado, para a importação aparecer na tela.
+  const handleBackupRestored = async () => {
+    swParamsTagRef.current = null;
+    setPresetReloadToken((value) => value + 1);
+    await reloadGlobalConfig();
+    await loadBankCurrent();
+  };
+
   // So tenta loadBankCurrent quando ha transport disponivel — evita HTTP
   // spam pra bfmidi.local antes do USB ser conectado em modo USB-only.
   useEffect(() => {
@@ -17058,6 +17074,7 @@ function App() {
             sysSectionReq={sysSectionReq}
             onSysSectionApplied={() => setSysSectionReq(null)}
             getGlobalConfigForBackup={getGlobalConfigForBackup}
+            onBackupRestored={handleBackupRestored}
             model={model} setModel={setModel}
             switchOperationMode={switchOperationMode} setSwitchOperationMode={setSwitchOperationMode}
             hybridSwitchLayout={hybridSwitchLayout} setHybridSwitchLayout={setHybridSwitchLayout}
