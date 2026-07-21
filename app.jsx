@@ -9960,6 +9960,7 @@ function DemoControllerModal({
 }) {
   const emptyLedPixels = () => Array.from({ length: 9 }, () => [false, false, false]);
   const [activeLedPixels, setActiveLedPixels] = useState(emptyLedPixels);
+  const [spinStates, setSpinStates] = useState(() => Array(9).fill(-1));
   const [pressedSwitch, setPressedSwitch] = useState(0);
   const modelInfo = MODELS.find((item) => item.id === model) || MODELS[0];
   const switchCount = Math.max(4, Math.min(8, Number(modelInfo?.switches) || 6));
@@ -9973,7 +9974,13 @@ function DemoControllerModal({
   const demoNames = ['CLEAN AMBIENT', 'CRUNCH', 'LEAD', 'MODULATION', 'DELAY', 'SOLO'];
   const displayName = String(bankDisplayName || demoNames[presetNumber - 1] || `PRESET ${tag}`);
   const liveModeName = (sw) => {
-    const mode = SW_MODES.find((item) => item.id === (swModes?.[sw] || 'mute'));
+    const modeId = swModes?.[sw] || 'mute';
+    const mode = SW_MODES.find((item) => item.id === modeId);
+    if (modeId === 'spin') {
+      const state = spinStates[sw] >= 0 && spinStates[sw] <= 2 ? spinStates[sw] : 0;
+      const spinDisplay = swDisplay?.[sw]?.spin?.[state];
+      return spinDisplay?.sigla || `SPIN ${state + 1}`;
+    }
     return swDisplay?.[sw]?.sigla || mode?.title || `SW ${sw}`;
   };
   const ledIndexFor = (sw) => {
@@ -10020,9 +10027,16 @@ function DemoControllerModal({
     if (modeId === 'fx2') return [false, true, true];
     return [true, true, true];
   };
+  const spinArcsForState = (state) => {
+    // spinState 0/1/2 = pixel fisico 1/2/3. Na arte, esses pixels ficam
+    // respectivamente nos arcos sup. esquerdo / inferior / sup. direito.
+    if (state === 1) return [true, false, false];
+    if (state === 2) return [false, false, true];
+    return [false, true, false];
+  };
   const activeSwitches = new Set(
     Array.from({ length: 6 }, (_, index) => index + 1)
-      .filter((sw) => activeLedPixels[sw]?.some(Boolean))
+      .filter((sw) => (swModes?.[sw] === 'spin') || activeLedPixels[sw]?.some(Boolean))
   );
 
   useEffect(() => {
@@ -10032,7 +10046,20 @@ function DemoControllerModal({
     return () => window.removeEventListener('keydown', closeOnEscape);
   }, [open, onClose]);
 
-  useEffect(() => { setActiveLedPixels(emptyLedPixels()); }, [tag, switchMode]);
+  useEffect(() => {
+    setActiveLedPixels(emptyLedPixels());
+    const nextSpinStates = Array(9).fill(-1);
+    if (switchMode === 'live') {
+      for (let sw = 1; sw <= 6; sw++) {
+        if (swModes?.[sw] !== 'spin') continue;
+        const params = modeParamsFor(sw).params;
+        // Espelha SW_BANK.h: at_preset ativo inicia no estado/pixel 1.
+        // Sem ele, o firmware fica awaiting (-1), piscando o mesmo pixel 1.
+        nextSpinStates[sw] = Number(params.at_preset) !== 0 ? 0 : -1;
+      }
+    }
+    setSpinStates(nextSpinStates);
+  }, [tag, switchMode, swModes, swParams]);
 
   if (!open) return null;
 
@@ -10041,6 +10068,14 @@ function DemoControllerModal({
       if (switchMode === 'preset') {
         if (sw <= presetCount) onSelectPreset(sw);
       } else {
+        if (swModes?.[sw] === 'spin') {
+          setSpinStates((current) => {
+            const next = [...current];
+            next[sw] = current[sw] < 0 ? 0 : (current[sw] + 1) % 3;
+            return next;
+          });
+          return;
+        }
         const mask = primaryPixelMaskFor(sw);
         setActiveLedPixels((current) => {
           const next = current.map((pixels) => [...pixels]);
@@ -10057,6 +10092,16 @@ function DemoControllerModal({
 
   const toggleLedArc = (sw, arc) => {
     if (switchMode !== 'live' || sw < 1 || sw > 6) return;
+    if (swModes?.[sw] === 'spin') {
+      // Clique direto no arco tambem seleciona o estado SPIN correspondente.
+      const stateByArc = [1, 0, 2];
+      setSpinStates((current) => {
+        const next = [...current];
+        next[sw] = stateByArc[arc];
+        return next;
+      });
+      return;
+    }
     setActiveLedPixels((current) => {
       const next = current.map((pixels) => [...pixels]);
       next[sw][arc] = !next[sw][arc];
@@ -10164,7 +10209,9 @@ function DemoControllerModal({
                       ? [false, false, false]
                       : switchMode === 'preset'
                         ? [sw === presetNumber, sw === presetNumber, sw === presetNumber]
-                        : activeLedPixels[sw] || [false, false, false];
+                        : swModes?.[sw] === 'spin'
+                          ? spinArcsForState(spinStates[sw])
+                          : activeLedPixels[sw] || [false, false, false];
                   const arcColors = ledArcColorsFor(sw);
                   const isActive = litArcs.some(Boolean);
                   return (
