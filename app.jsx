@@ -11233,7 +11233,7 @@ function DemoControllerModal({
           </div>
         </div>
 
-        <div className={`bf-demo-controller is-${switchCount}sw${displayWide ? ' is-wide-display' : ''}${hasControllerArtwork ? ' is-seven-switch-artwork' : ''}`}
+        <div className={`bf-demo-controller is-${switchCount}sw${displayWide ? ' is-wide-display' : ''}${hasControllerArtwork ? ` is-seven-switch-artwork is-${artworkInfo.id}-artwork` : ''}`}
              style={{ '--demo-brightness': Math.max(0.25, Number(brightness || 72) / 100) }}>
           {hasControllerArtwork ? (
             <div className={`bf-demo-seven-switch-stage is-${artworkInfo.id}`}

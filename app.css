@@ -6395,6 +6395,13 @@ button.bf-select-btn {
   .bf-demo-seven-switch-display .bf-demo-display-name { font-size: 12px; }
   .bf-demo-seven-switch-display .bf-demo-display-tag { font-size: 18px; }
 }
+
+/* A placa 7SW e mais alta que os outros layouts. Mantem a arte centralizada
+   com uma pequena reducao sem alterar coordenadas do display e footswitches. */
+.bf-demo-controller.is-7sw-artwork {
+  width: 88%;
+  margin-inline: auto;
+}
 .bf-studio-np-esw-master {
   margin-top: 10px;
   padding: 10px 12px;
