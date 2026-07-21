@@ -6116,14 +6116,44 @@ button.bf-select-btn {
   stroke: color-mix(in srgb, var(--led-color) 55%, transparent);
   filter: drop-shadow(0 0 8px color-mix(in srgb, var(--led-color) 45%, transparent));
 }
-.bf-demo-seven-switch-control.is-active,
 .bf-demo-seven-switch-control.is-pressed {
-  stroke: var(--led-color);
+  stroke: rgba(255,255,255,.72);
   stroke-width: 42;
-  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--led-color) 78%, transparent));
+  filter: drop-shadow(0 0 8px rgba(255,255,255,.26));
 }
 .bf-demo-seven-switch-control.is-pressed {
   stroke-width: 58;
+}
+.bf-demo-led-segment { cursor: pointer; }
+.bf-demo-led-segment-outline,
+.bf-demo-led-segment-fill {
+  fill: none;
+  stroke-linecap: butt;
+  transition: stroke .15s ease, filter .15s ease, opacity .15s ease;
+}
+.bf-demo-led-segment-outline {
+  pointer-events: none;
+  stroke: #34383b;
+  stroke-width: 190;
+}
+.bf-demo-led-segment-fill {
+  pointer-events: stroke;
+  stroke: #e4e8ea;
+  stroke-width: 154;
+  opacity: .9;
+  filter: drop-shadow(0 8px 7px rgba(0,0,0,.24));
+}
+.bf-demo-led-segment-fill.is-on {
+  stroke: var(--segment-color);
+  opacity: 1;
+  filter:
+    brightness(var(--demo-brightness))
+    drop-shadow(0 0 18px color-mix(in srgb, var(--segment-color) 82%, transparent));
+}
+.bf-demo-led-segment:hover .bf-demo-led-segment-fill {
+  filter:
+    brightness(1.08)
+    drop-shadow(0 0 12px color-mix(in srgb, var(--segment-color) 48%, transparent));
 }
 .bf-demo-seven-switch-controls g[aria-disabled="true"] { cursor: default; }
 .bf-demo-seven-switch-control.is-disabled { opacity: .25; }

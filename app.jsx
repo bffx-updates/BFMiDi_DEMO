@@ -9955,10 +9955,11 @@ function DemoControllerModal({
   open, onClose, model, switchMode, onSetSwitchMode,
   bankLetterIndex, presetNumber, bankDisplayName, presetCount,
   onSelectPreset, onPreviousBank, onNextBank,
-  swModes, swDisplay, ledColorMode, letterLedColors, switchLedColors,
+  swModes, swParams, swDisplay, ledColorMode, letterLedColors, switchLedColors,
   liveLedColor, brightness,
 }) {
-  const [activeSwitches, setActiveSwitches] = useState(() => new Set());
+  const emptyLedPixels = () => Array.from({ length: 9 }, () => [false, false, false]);
+  const [activeLedPixels, setActiveLedPixels] = useState(emptyLedPixels);
   const [pressedSwitch, setPressedSwitch] = useState(0);
   const modelInfo = MODELS.find((item) => item.id === model) || MODELS[0];
   const switchCount = Math.max(4, Math.min(8, Number(modelInfo?.switches) || 6));
@@ -9981,6 +9982,48 @@ function DemoControllerModal({
     return Number(letterLedColors?.[bankLetterIndex]) || 7;
   };
   const ledFor = (sw) => LED_COLORS[ledIndexFor(sw)]?.hex || '#ff7a1a';
+  const modeParamsFor = (sw) => {
+    const modeId = swModes?.[sw] || 'mute';
+    return {
+      modeId,
+      params: (swParams?.[sw]?.[modeId]) || DEFAULT_SW_PARAMS(modeId) || {},
+    };
+  };
+  const colorFromParam = (value, fallback) => {
+    const id = Number(value);
+    return Number.isFinite(id) && LED_COLORS[id] ? LED_COLORS[id].hex : fallback;
+  };
+  // Ordem visual dos arcos: 0=inferior (pixel 2), 1=superior esquerdo
+  // (pixel 1), 2=superior direito (pixel 3). E a mesma usada no firmware.
+  const ledArcColorsFor = (sw) => {
+    const fallback = ledFor(sw);
+    if (switchMode !== 'live' || sw > 6) return [fallback, fallback, fallback];
+    const { modeId, params } = modeParamsFor(sw);
+    const colorA = colorFromParam(params.color, fallback);
+    const colorB = colorFromParam(params.color2, colorA);
+    const colorC = colorFromParam(params.color3, colorA);
+    const hasB = (Number(params.ch2) >= 1 && Number(params.ch2) <= 16) || Number(params.fav2) === 1;
+    const hasC = (Number(params.ch3) >= 1 && Number(params.ch3) <= 16) || Number(params.fav3) === 1;
+    if ((modeId === 'fx1' || modeId === 'fx3') && hasC) return [colorB, colorA, colorC];
+    if ((modeId === 'fx1' || modeId === 'fx3' || modeId === 'fx2') && hasB) {
+      return [colorB, colorA, colorA];
+    }
+    if (modeId === 'fx2') return [colorB, colorA, colorA];
+    return [colorA, colorA, colorA];
+  };
+  const primaryPixelMaskFor = (sw) => {
+    const { modeId, params } = modeParamsFor(sw);
+    const hasB = (Number(params.ch2) >= 1 && Number(params.ch2) <= 16) || Number(params.fav2) === 1;
+    const hasC = (Number(params.ch3) >= 1 && Number(params.ch3) <= 16) || Number(params.fav3) === 1;
+    if ((modeId === 'fx1' || modeId === 'fx3') && hasC) return [false, true, false];
+    if ((modeId === 'fx1' || modeId === 'fx3' || modeId === 'fx2') && hasB) return [false, true, true];
+    if (modeId === 'fx2') return [false, true, true];
+    return [true, true, true];
+  };
+  const activeSwitches = new Set(
+    Array.from({ length: 6 }, (_, index) => index + 1)
+      .filter((sw) => activeLedPixels[sw]?.some(Boolean))
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -9989,7 +10032,7 @@ function DemoControllerModal({
     return () => window.removeEventListener('keydown', closeOnEscape);
   }, [open, onClose]);
 
-  useEffect(() => { setActiveSwitches(new Set()); }, [tag, switchMode]);
+  useEffect(() => { setActiveLedPixels(emptyLedPixels()); }, [tag, switchMode]);
 
   if (!open) return null;
 
@@ -9998,9 +10041,11 @@ function DemoControllerModal({
       if (switchMode === 'preset') {
         if (sw <= presetCount) onSelectPreset(sw);
       } else {
-        setActiveSwitches((current) => {
-          const next = new Set(current);
-          if (next.has(sw)) next.delete(sw); else next.add(sw);
+        const mask = primaryPixelMaskFor(sw);
+        setActiveLedPixels((current) => {
+          const next = current.map((pixels) => [...pixels]);
+          const turnOn = !mask.every((enabled, arc) => !enabled || next[sw][arc]);
+          next[sw] = next[sw].map((value, arc) => mask[arc] ? turnOn : value);
           return next;
         });
       }
@@ -10008,6 +10053,27 @@ function DemoControllerModal({
     }
     if (sw === 7) onNextBank();
     if (sw === 8) onSetSwitchMode(switchMode === 'live' ? 'preset' : 'live');
+  };
+
+  const toggleLedArc = (sw, arc) => {
+    if (switchMode !== 'live' || sw < 1 || sw > 6) return;
+    setActiveLedPixels((current) => {
+      const next = current.map((pixels) => [...pixels]);
+      next[sw][arc] = !next[sw][arc];
+      return next;
+    });
+  };
+
+  const ringSegmentPath = (cx, cy, angle) => {
+    const radius = 432;
+    const halfSpan = 54;
+    const start = (angle - halfSpan) * Math.PI / 180;
+    const end = (angle + halfSpan) * Math.PI / 180;
+    const x1 = cx + radius * Math.cos(start);
+    const y1 = cy + radius * Math.sin(start);
+    const x2 = cx + radius * Math.cos(end);
+    const y2 = cy + radius * Math.sin(end);
+    return `M ${x1} ${y1} A ${radius} ${radius} 0 0 1 ${x2} ${y2}`;
   };
 
   // Coordenadas originais do viewBox 8853.8 x 6898.93 do 7SW.svg.
@@ -10092,9 +10158,15 @@ function DemoControllerModal({
                    preserveAspectRatio="xMidYMid meet" aria-label="Controles interativos da 7SW+">
                 {sevenSwitchControls.map(({ sw, cx, cy, label }) => {
                   const disabled = sw <= 6 && sw > presetCount;
-                  const isActive = sw === 8
-                    ? switchMode === 'live'
-                    : switchMode === 'preset' ? sw === presetNumber : activeSwitches.has(sw);
+                  const litArcs = sw === 8
+                    ? [switchMode === 'live', switchMode === 'live', switchMode === 'live']
+                    : sw === 7
+                      ? [false, false, false]
+                      : switchMode === 'preset'
+                        ? [sw === presetNumber, sw === presetNumber, sw === presetNumber]
+                        : activeLedPixels[sw] || [false, false, false];
+                  const arcColors = ledArcColorsFor(sw);
+                  const isActive = litArcs.some(Boolean);
                   return (
                     <g key={sw} role="button" tabIndex={disabled ? -1 : 0}
                        aria-label={label} aria-disabled={disabled ? 'true' : 'false'}
@@ -10112,6 +10184,23 @@ function DemoControllerModal({
                         className={'bf-demo-seven-switch-control' + (isActive ? ' is-active' : '') +
                           (pressedSwitch === sw ? ' is-pressed' : '') + (disabled ? ' is-disabled' : '')}
                         style={{ '--led-color': ledFor(sw) }} />
+                      {[90, 210, 330].map((angle, arc) => (
+                        <g key={arc} className="bf-demo-led-segment"
+                           onPointerDown={(event) => event.stopPropagation()}
+                           onPointerUp={(event) => event.stopPropagation()}
+                           onClick={(event) => {
+                             event.stopPropagation();
+                             if (!disabled) {
+                               if (switchMode === 'live' && sw <= 6) toggleLedArc(sw, arc);
+                               else press(sw);
+                             }
+                           }}>
+                          <path d={ringSegmentPath(cx, cy, angle)} className="bf-demo-led-segment-outline" />
+                          <path d={ringSegmentPath(cx, cy, angle)}
+                            className={'bf-demo-led-segment-fill' + (litArcs[arc] ? ' is-on' : '')}
+                            style={{ '--segment-color': arcColors[arc] }} />
+                        </g>
+                      ))}
                     </g>
                   );
                 })}
@@ -10156,7 +10245,7 @@ function DemoControllerModal({
         </div>
 
         <div className="bf-demo-modal-foot">
-          <p>Use os footswitches para testar bancos, presets, LIVE MODE e a resposta do display.</p>
+          <p>Use os footswitches para testar bancos e modos. Em LIVE, clique diretamente em cada segmento do aro para testar os 3 pixels.</p>
           <button type="button" className="bf-demo-reset" onClick={() => {
             if (window.confirm('Restaurar todos os dados da demonstração?')) {
               resetDemoMemory();
@@ -17007,6 +17096,7 @@ function App() {
         onPreviousBank={prevBankLetter}
         onNextBank={nextBankLetter}
         swModes={swModes}
+        swParams={swParams}
         swDisplay={swDisplay}
         ledColorMode={ledColorMode}
         letterLedColors={letterLedColors}
