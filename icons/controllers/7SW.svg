@@ -6,14 +6,43 @@ viewBox="0 0 8853.8 6898.93"
  xmlns:xlink="http://www.w3.org/1999/xlink"
  xmlns:xodm="http://www.corel.com/coreldraw/odm/2003">
  <defs>
+  <radialGradient id="switchBase" cx="38%" cy="28%" r="72%">
+   <stop offset="0" stop-color="#ffffff"/>
+   <stop offset="0.42" stop-color="#dce2e5"/>
+   <stop offset="0.72" stop-color="#9ba3a8"/>
+   <stop offset="0.86" stop-color="#edf1f3"/>
+   <stop offset="1" stop-color="#666c70"/>
+  </radialGradient>
+  <linearGradient id="switchMetal" x1="12%" y1="8%" x2="88%" y2="94%">
+   <stop offset="0" stop-color="#fbfaf5"/>
+   <stop offset="0.18" stop-color="#b9b7af"/>
+   <stop offset="0.42" stop-color="#6d706f"/>
+   <stop offset="0.62" stop-color="#d9d5cb"/>
+   <stop offset="0.82" stop-color="#858783"/>
+   <stop offset="1" stop-color="#434746"/>
+  </linearGradient>
+  <radialGradient id="switchCap" cx="34%" cy="24%" r="76%">
+   <stop offset="0" stop-color="#f8f5ec"/>
+   <stop offset="0.24" stop-color="#c8c5bc"/>
+   <stop offset="0.55" stop-color="#777a78"/>
+   <stop offset="0.78" stop-color="#dad7ce"/>
+   <stop offset="1" stop-color="#4e5251"/>
+  </radialGradient>
+  <filter id="switchShadow" x="-30%" y="-30%" width="160%" height="170%">
+   <feDropShadow dx="0" dy="42" stdDeviation="34" flood-color="#000000" flood-opacity="0.62"/>
+  </filter>
   <style type="text/css">
    <![CDATA[
-    .str0 {stroke:#373435;stroke-width:8.67;stroke-miterlimit:22.9256}
+    .str0 {stroke:#4d5255;stroke-width:10.5;stroke-miterlimit:22.9256}
     .fil4 {fill:none}
-    .fil3 {fill:#FEFEFE}
-    .fil0 {fill:#373435}
-    .fil2 {fill:#EC268F;fill-rule:nonzero}
-    .fil1 {fill:#00AFEF;fill-rule:nonzero}
+    .fil3 {fill:url(#switchBase)}
+    .fil0 {fill:#f2f1ec}
+    .fil2 {fill:#cfd6da;fill-rule:nonzero}
+    .fil1 {fill:#aeb8be;fill-rule:nonzero}
+    circle[r="515.9"] {fill:url(#switchBase);filter:url(#switchShadow);stroke:#7f878c;stroke-width:14}
+    circle[r="348.02"] {fill:url(#switchMetal);stroke:#e0ddd4;stroke-width:12}
+    circle[r="251.24"] {fill:url(#switchCap);stroke:#515553;stroke-width:14}
+    polygon.fil4 {stroke:#d5d2c9;stroke-width:16}
    ]]>
   </style>
  </defs>
