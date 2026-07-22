@@ -6823,6 +6823,12 @@ button.bf-select-btn {
   width: 75%;
   margin-inline: auto;
 }
+/* A MICRO ocupa menos espaco fisico que os demais modelos. Reduz a arte em
+   30% sem alterar as coordenadas relativas do display e dos footswitches. */
+.bf-demo-controller.is-micro-artwork {
+  width: 70%;
+  margin-inline: auto;
+}
 .bf-studio-np-esw-master {
   margin-top: 10px;
   padding: 10px 12px;
