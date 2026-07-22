@@ -369,6 +369,14 @@ const MODELS = [
   { id: 'BFMIDI-3 8SW+', tag: 'BFMIDI-3', switches: 8, size: '3x3 GRID', chip: 's3' },
 ];
 
+const DEMO_CONTROLLER_MODEL_IDS = [
+  'BFMIDI-3 NANO+',
+  'BFMIDI-3 7SW+',
+  'BFMIDI-3 MICRO',
+  'BFMIDI-3 6SW+',
+];
+const DEMO_DEFAULT_MODEL = 'BFMIDI-3 7SW+';
+
 const FAMILIES = ['BFMIDI-1', 'BFMIDI-2', 'BFMIDI-3'];
 
 // EXTERNAL EXPRESSION (GLOBAL > MIDI) — resolucao do ADC do ESP32-S2 (12 bits,
@@ -10533,8 +10541,9 @@ function DemoControllerModal({
   const liveTapLastMsRef = useRef(Array(9).fill(0));
   const bpmSequenceRef = useRef({ sumMs: 0, count: 0, lastIntervalMs: 0 });
   const modelInfo = MODELS.find((item) => item.id === model) || MODELS[0];
-  const selectableModels = MODELS.filter((item) =>
-    item.id.startsWith('BFMIDI-3') && modelIsForChip(item));
+  const selectableModels = DEMO_CONTROLLER_MODEL_IDS
+    .map((id) => MODELS.find((item) => item.id === id))
+    .filter(Boolean);
   const switchCount = Math.max(4, Math.min(8, Number(modelInfo?.switches) || 6));
   const displayWide = String(model).startsWith('BFMIDI-3');
   const modelName = String(model).trim();
@@ -15944,7 +15953,7 @@ function App() {
     }
   }, []);
 
-  const [model, setModel] = useState('BFMIDI-3 7S');
+  const [model, setModel] = useState(DEMO_DEFAULT_MODEL);
   const setSimulatorModel = useCallback((nextModel) => {
     const valid = MODELS.some((item) => item.id === nextModel);
     if (!valid) return;
@@ -15959,8 +15968,8 @@ function App() {
     }
   }, []);
   useEffect(() => {
-    if (DEMO_MODE && model && !model.startsWith('BFMIDI-3')) {
-      setSimulatorModel('BFMIDI-3 7S');
+    if (DEMO_MODE && model && !DEMO_CONTROLLER_MODEL_IDS.includes(model)) {
+      setSimulatorModel(DEMO_DEFAULT_MODEL);
     }
   }, [model, setSimulatorModel]);
   // Chip do pedal ('s2'|'s3'), do campo "chip" do /config/global. Vazio ate a
