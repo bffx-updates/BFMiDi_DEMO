@@ -6180,9 +6180,141 @@ button.bf-select-btn {
   gap: 18px;
 }
 
-.bf-demo-modal-head { padding: 20px 24px 16px; }
+.bf-demo-modal-head {
+  display: block;
+  padding: 0;
+}
+.bf-demo-entry-nav {
+  min-height: 66px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 12px 18px;
+  border-bottom: 1px solid rgba(255,255,255,.075);
+  background: #0b0c10;
+}
+.bf-demo-entry-tabs {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 12px;
+  background: rgba(255,255,255,.03);
+}
+.bf-demo-entry-tabs button {
+  min-width: 132px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(255,255,255,.48);
+  font: 900 10px/1 system-ui, sans-serif;
+  letter-spacing: .1em;
+  cursor: pointer;
+  transition: color .15s ease, background .15s ease, box-shadow .15s ease;
+}
+.bf-demo-entry-tabs button:hover { color: rgba(255,255,255,.82); }
+.bf-demo-entry-tabs button.is-on {
+  color: #170e08;
+  background: #ff6a1f;
+  box-shadow: 0 6px 18px rgba(255,106,31,.3), inset 0 1px rgba(255,255,255,.34);
+}
+.bf-demo-entry-tab-screen {
+  width: 14px;
+  height: 10px;
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
+  box-shadow: inset 0 -2px currentColor;
+}
+.bf-demo-entry-tab-app {
+  width: 13px;
+  height: 13px;
+  border: 1.5px solid currentColor;
+  border-radius: 3px;
+  box-shadow: inset 0 3px transparent;
+  position: relative;
+}
+.bf-demo-entry-tab-app::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  top: 3px;
+  border-top: 1px solid currentColor;
+}
+.bf-demo-model-field {
+  position: relative;
+  width: min(410px, 46%);
+  min-width: 280px;
+  display: grid;
+  grid-template-columns: auto minmax(150px, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 6px 38px 6px 12px;
+  border: 1px solid rgba(255,255,255,.11);
+  border-radius: 11px;
+  background: rgba(255,255,255,.035);
+}
+.bf-demo-model-field > span {
+  color: rgba(255,255,255,.38);
+  font: 850 8px/1.2 system-ui, sans-serif;
+  letter-spacing: .11em;
+  white-space: nowrap;
+}
+.bf-demo-model-field select {
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  padding: 0 4px;
+  border: 0;
+  outline: 0;
+  appearance: none;
+  background: transparent;
+  color: #f5f7fa;
+  font: 850 12px/1 system-ui, sans-serif;
+  cursor: pointer;
+}
+.bf-demo-model-field select option { color: #f5f7fa; background: #17191e; }
+.bf-demo-model-field > i {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-55%);
+  color: #ff8a3a;
+  font: 900 17px/1 system-ui, sans-serif;
+  pointer-events: none;
+}
+.bf-demo-modal-identity {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 17px 24px 15px;
+}
 .bf-demo-modal-head h2 { margin: 3px 0 0; font-size: clamp(18px, 2.4vw, 28px); letter-spacing: -.02em; }
 .bf-demo-modal-kicker { color: #ff7a1a; font: 850 10px/1 system-ui; letter-spacing: .16em; }
+.bf-demo-entry-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: rgba(255,255,255,.38);
+  font: 850 8px/1 system-ui, sans-serif;
+  letter-spacing: .12em;
+}
+.bf-demo-entry-status i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #49df82;
+  box-shadow: 0 0 10px rgba(73,223,130,.7);
+}
 .bf-demo-modal-close {
   width: 38px;
   height: 38px;
@@ -6640,7 +6772,16 @@ button.bf-select-btn {
   .bf-demo-open { padding: 0 9px; }
   .bf-demo-modal-backdrop { padding: 0; place-items: stretch; }
   .bf-demo-modal { min-height: 100dvh; border: 0; border-radius: 0; }
-  .bf-demo-modal-head { padding: 16px; }
+  .bf-demo-modal-head { padding: 0; }
+  .bf-demo-entry-nav { align-items: stretch; flex-direction: column; gap: 9px; padding: 10px 12px; }
+  .bf-demo-entry-tabs { display: flex; width: 100%; box-sizing: border-box; }
+  .bf-demo-entry-tabs button { min-width: 0; flex: 1; }
+  .bf-demo-model-field {
+    width: 100%; min-width: 0; box-sizing: border-box;
+    grid-template-columns: minmax(90px, auto) minmax(0, 1fr);
+  }
+  .bf-demo-model-field select { font-size: 11px; }
+  .bf-demo-modal-identity { padding: 15px 16px 13px; }
   .bf-demo-toolbar { padding: 10px 16px; flex-wrap: wrap; }
   .bf-demo-controller { margin: 14px; padding: 20px 16px; }
   .bf-demo-controller.is-seven-switch-artwork { padding: 0; }

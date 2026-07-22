@@ -10489,7 +10489,8 @@ function DemoMidiMonitorCard({ events, mode, onSetMode, onClear }) {
 }
 
 function DemoControllerModal({
-  open, onClose, model, switchMode, onSetSwitchMode,
+  open, onClose, model, onSetModel, onOpenApplication,
+  switchMode, onSetSwitchMode,
   bankLetterIndex, presetNumber, bankDisplayName, presetCount,
   onSelectPreset, onPreviousBank, onNextBank,
   swModes, swParams, swDisplay, ledColorMode, letterLedColors, switchLedColors,
@@ -10532,6 +10533,7 @@ function DemoControllerModal({
   const liveTapLastMsRef = useRef(Array(9).fill(0));
   const bpmSequenceRef = useRef({ sumMs: 0, count: 0, lastIntervalMs: 0 });
   const modelInfo = MODELS.find((item) => item.id === model) || MODELS[0];
+  const selectableModels = MODELS.filter((item) => modelIsForChip(item));
   const switchCount = Math.max(4, Math.min(8, Number(modelInfo?.switches) || 6));
   const displayWide = String(model).startsWith('BFMIDI-3');
   const modelName = String(model).trim();
@@ -11567,12 +11569,34 @@ function DemoControllerModal({
       <div className="bf-demo-modal" role="dialog" aria-modal="true"
            aria-label={`Simulador ${model}`} onClick={(event) => event.stopPropagation()}>
         <div className="bf-demo-modal-head">
-          <div>
-            <span className="bf-demo-modal-kicker">CONTROLADORA VIRTUAL</span>
-            <h2>{model}</h2>
+          <div className="bf-demo-entry-nav">
+            <div className="bf-demo-entry-tabs" role="group" aria-label="Área da demonstração">
+              <button type="button" className="is-on" aria-current="page">
+                <span className="bf-demo-entry-tab-screen" aria-hidden="true" />
+                SIMULADOR
+              </button>
+              <button type="button" onClick={onOpenApplication || onClose}>
+                <span className="bf-demo-entry-tab-app" aria-hidden="true" />
+                APLICATIVO
+              </button>
+            </div>
+            <label className="bf-demo-model-field">
+              <span>MODELO DA CONTROLADORA</span>
+              <select value={model} onChange={(event) => onSetModel?.(event.target.value)}>
+                {selectableModels.map((item) => (
+                  <option key={item.id} value={item.id}>{item.id}</option>
+                ))}
+              </select>
+              <i aria-hidden="true">⌄</i>
+            </label>
           </div>
-          <button type="button" className="bf-demo-modal-close" onClick={onClose}
-                  aria-label="Fechar simulador">×</button>
+          <div className="bf-demo-modal-identity">
+            <div>
+              <span className="bf-demo-modal-kicker">CONTROLADORA VIRTUAL</span>
+              <h2>{model}</h2>
+            </div>
+            <span className="bf-demo-entry-status"><i aria-hidden="true" /> SIMULAÇÃO LOCAL</span>
+          </div>
         </div>
 
         <div className="bf-demo-toolbar">
@@ -15624,7 +15648,9 @@ function App() {
   // renderizado aqui no nível raiz). Os demais textos vêm dos componentes filhos.
   const { t } = useBfI18n();
   const [page, setPage] = useState('preset_config');
-  const [demoOpen, setDemoOpen] = useState(false);
+  // A DEMO abre diretamente no simulador. O editor completo continua
+  // disponível pela aba APLICATIVO no topo da tela de entrada.
+  const [demoOpen, setDemoOpen] = useState(DEMO_MODE);
   // Pedido de seção do SYSTEM vindo de fora (ex.: clicar no ícone de WiFi do
   // header abre SYSTEM > WIFI). PageSystemConfig aplica via efeito e limpa.
   const [sysSectionReq, setSysSectionReq] = useState(null);
@@ -15918,6 +15944,19 @@ function App() {
   }, []);
 
   const [model, setModel] = useState('BFMIDI-3 7S');
+  const setSimulatorModel = useCallback((nextModel) => {
+    const valid = MODELS.some((item) => item.id === nextModel);
+    if (!valid) return;
+    setModel(nextModel);
+    // O seletor e um atalho real de SISTEMA > Modelo: na DEMO, persiste a
+    // escolha imediatamente na memória local sem exigir que o usuário entre
+    // no aplicativo apenas para apertar SAVE.
+    if (DEMO_MODE) {
+      const body = new URLSearchParams();
+      body.set('board', nextModel);
+      apiCall('POST', '/config/global', body).catch(() => {});
+    }
+  }, []);
   // Chip do pedal ('s2'|'s3'), do campo "chip" do /config/global. Vazio ate a
   // primeira carga (ou firmware antigo sem o campo) => seletor mostra tudo.
   const [deviceChip, setDeviceChip] = useState('');
@@ -18415,7 +18454,7 @@ function App() {
 
   return (
     <div className="phone-frame">
-      <div className={
+      {!demoOpen && <div className={
         'bf-screen'
         + (iconShape === 'circle' ? ' is-icon-circle' : '')
         + (currentSystemTheme.light ? ' is-theme-light' : '')
@@ -18637,12 +18676,14 @@ function App() {
           layerClipboardStatus={layerClipboardStatus}
           editorLayer={editorLayer}
         />
-      </div>
+      </div>}
       <PasteProgressModal progress={pasteProgress} />
       <DemoControllerModal
         open={demoOpen}
         onClose={() => setDemoOpen(false)}
         model={model}
+        onSetModel={setSimulatorModel}
+        onOpenApplication={() => setDemoOpen(false)}
         switchMode={switchMode}
         onSetSwitchMode={setDeviceSwitchMode}
         bankLetterIndex={bankLetterIndex}
