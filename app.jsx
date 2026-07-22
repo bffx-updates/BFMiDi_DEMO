@@ -10533,7 +10533,8 @@ function DemoControllerModal({
   const liveTapLastMsRef = useRef(Array(9).fill(0));
   const bpmSequenceRef = useRef({ sumMs: 0, count: 0, lastIntervalMs: 0 });
   const modelInfo = MODELS.find((item) => item.id === model) || MODELS[0];
-  const selectableModels = MODELS.filter((item) => modelIsForChip(item));
+  const selectableModels = MODELS.filter((item) =>
+    item.id.startsWith('BFMIDI-3') && modelIsForChip(item));
   const switchCount = Math.max(4, Math.min(8, Number(modelInfo?.switches) || 6));
   const displayWide = String(model).startsWith('BFMIDI-3');
   const modelName = String(model).trim();
@@ -15957,6 +15958,11 @@ function App() {
       apiCall('POST', '/config/global', body).catch(() => {});
     }
   }, []);
+  useEffect(() => {
+    if (DEMO_MODE && model && !model.startsWith('BFMIDI-3')) {
+      setSimulatorModel('BFMIDI-3 7S');
+    }
+  }, [model, setSimulatorModel]);
   // Chip do pedal ('s2'|'s3'), do campo "chip" do /config/global. Vazio ate a
   // primeira carga (ou firmware antigo sem o campo) => seletor mostra tudo.
   const [deviceChip, setDeviceChip] = useState('');
